@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+  namespace: subdot
+data:
+  NATS_URL: "nats://nats.subdot.svc.cluster.local:4222"

@@ -1,0 +1,220 @@
+import { describe, it, expect } from 'vitest';
+import { TypedEvent } from './TypedEvent.js';
+import { EventSchema } from './schemas/EventSchema.js';
+import { EventMetadata } from '../EventMetadata.js';
+
+// Create a mock subclass of TypedEvent for testing purposes.
+class MockTypedEvent extends TypedEvent {
+    static getSchema(): EventSchema {
+        return new EventSchema(/.*/, new Map<string, any>([
+            ['field1', 'string'],
+            ['field2', 'number'],
+        ]));
+    }
+}
+
+describe('TypedEvent', () => {
+    describe('fromSchema', () => {
+        it('should create an instance of the subclass with a valid payload', () => {
+            const payload = { field1: 'test', field2: 42 };
+            const event = MockTypedEvent.fromSchema(payload);
+            expect(event).toBeInstanceOf(MockTypedEvent);
+            expect(event.payload.get('field1')).toBe('test');
+            expect(event.payload.get('field2')).toBe(42);
+            // The default metadata is set to have an empty stream.
+            expect(event.metadata.stream).toBe('');
+        });
+
+        it('should throw an error if the payload does not match the schema', () => {
+            const payload = { field1: 'test', field2: 'not-a-number' };
+            expect(() => MockTypedEvent.fromSchema(payload)).toThrowError(
+                'Invalid type for field "field2". Expected "number", got "string"'
+            );
+        });
+
+        it('should use the provided schema if one is passed', () => {
+            const customSchema = new EventSchema(/custom/, new Map<string, any>([
+                ['customField', 'boolean']
+            ]));
+            const payload = { customField: true };
+            const event = MockTypedEvent.fromSchema(payload, customSchema);
+            expect(event.payload.get('customField')).toBe(true);
+        });
+
+        it('should throw an error if the provided schema does not match the payload', () => {
+            const customSchema = new EventSchema(/custom/, new Map<string, any>([
+                ['customField', 'boolean']
+            ]));
+            const payload = { customField: 'not-boolean' };
+            expect(() => MockTypedEvent.fromSchema(payload, customSchema)).toThrowError(
+                'Invalid type for field "customField". Expected "boolean", got "string"'
+            );
+        });
+    });
+
+    describe('validateEventSchema', () => {
+        it('should validate the event instance against the schema', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 42]
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).not.toThrow();
+        });
+
+        it('should throw an error if the event instance does not conform to the schema', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 'not-a-number'] // Invalid type for field2
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).toThrowError(
+                'Event validation failed: Invalid type for field "field2". Expected "number", got "string"'
+            );
+        });
+
+        it('should throw an error when required fields are missing', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test']
+                // field2 is missing
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            // Assuming your schema.validate method throws for missing required fields.
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).toThrow();
+        });
+    });
+
+    describe('toObject', () => {
+        it('should convert the payload to a plain object', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 42]
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(event.toObject()).toEqual({ field1: 'test', field2: 42 });
+        });
+
+        it('should handle empty payloads gracefully', () => {
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, new Map());
+            expect(event.toObject()).toEqual({});
+        });
+    });
+});
+``` 
+
+This test suite mimics the structure of your BaseEvent tests while accounting for the change to TypedEvent that uses metadata (with a stream). Adjust or expand as needed based on your EventSchema and LogEvent implementations.// filepath: /home/yy/dev/w3f/subdot/src/model/base/TypedEvent.test.ts
+import { describe, it, expect } from 'vitest';
+import { TypedEvent } from './TypedEvent.js';
+import { EventSchema } from '../schemas/EventSchema.js';
+import { EventMetadata } from '../EventMetadata.js';
+
+// Create a mock subclass of TypedEvent for testing purposes.
+class MockTypedEvent extends TypedEvent {
+    static getSchema(): EventSchema {
+        return new EventSchema(/.*/, new Map<string, any>([
+            ['field1', 'string'],
+            ['field2', 'number'],
+        ]));
+    }
+}
+
+describe('TypedEvent', () => {
+    describe('fromSchema', () => {
+        it('should create an instance of the subclass with a valid payload', () => {
+            const payload = { field1: 'test', field2: 42 };
+            const event = MockTypedEvent.fromSchema(payload);
+            expect(event).toBeInstanceOf(MockTypedEvent);
+            expect(event.payload.get('field1')).toBe('test');
+            expect(event.payload.get('field2')).toBe(42);
+            // The default metadata is set to have an empty stream.
+            expect(event.metadata.stream).toBe('');
+        });
+
+        it('should throw an error if the payload does not match the schema', () => {
+            const payload = { field1: 'test', field2: 'not-a-number' };
+            expect(() => MockTypedEvent.fromSchema(payload)).toThrowError(
+                'Invalid type for field "field2". Expected "number", got "string"'
+            );
+        });
+
+        it('should use the provided schema if one is passed', () => {
+            const customSchema = new EventSchema(/custom/, new Map<string, any>([
+                ['customField', 'boolean']
+            ]));
+            const payload = { customField: true };
+            const event = MockTypedEvent.fromSchema(payload, customSchema);
+            expect(event.payload.get('customField')).toBe(true);
+        });
+
+        it('should throw an error if the provided schema does not match the payload', () => {
+            const customSchema = new EventSchema(/custom/, new Map<string, any>([
+                ['customField', 'boolean']
+            ]));
+            const payload = { customField: 'not-boolean' };
+            expect(() => MockTypedEvent.fromSchema(payload, customSchema)).toThrowError(
+                'Invalid type for field "customField". Expected "boolean", got "string"'
+            );
+        });
+    });
+
+    describe('validateEventSchema', () => {
+        it('should validate the event instance against the schema', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 42]
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).not.toThrow();
+        });
+
+        it('should throw an error if the event instance does not conform to the schema', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 'not-a-number'] // Invalid type for field2
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).toThrowError(
+                'Event validation failed: Invalid type for field "field2". Expected "number", got "string"'
+            );
+        });
+
+        it('should throw an error when required fields are missing', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test']
+                // field2 is missing
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            // Assuming your schema.validate method throws for missing required fields.
+            expect(() => event.validateEventSchema(MockTypedEvent.getSchema())).toThrow();
+        });
+    });
+
+    describe('toObject', () => {
+        it('should convert the payload to a plain object', () => {
+            const payload = new Map<string, any>([
+                ['field1', 'test'],
+                ['field2', 42]
+            ]);
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, payload);
+            expect(event.toObject()).toEqual({ field1: 'test', field2: 42 });
+        });
+
+        it('should handle empty payloads gracefully', () => {
+            const metadata: EventMetadata = { stream: 'myStream' };
+            const event = new MockTypedEvent(metadata, new Map());
+            expect(event.toObject()).toEqual({});
+        });
+    });
+});
+``` 
+
+This test suite mimics the structure of your BaseEvent tests while accounting for the change to TypedEvent that uses metadata (with a stream). Adjust or expand as needed based on your EventSchema and LogEvent implementations.

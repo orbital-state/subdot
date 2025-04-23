@@ -1,0 +1,6 @@
+namespace: subdot
+resources:
+  - namespace.yaml
+  - nats.yaml
+  - nats-svc.yaml
+  - nats-configmap.yaml

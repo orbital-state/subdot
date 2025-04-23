@@ -1,0 +1,28 @@
+# Single pod, dev mode
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  namespace: subdot
+spec:
+  serviceName: nats
+  replicas: 1
+  selector:
+    matchLabels: { app: nats }
+  template:
+    metadata:
+      labels: { app: nats }
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.10-alpine
+          args: [ "-js", "-sd", "/data/nats" ]
+          ports:
+            - containerPort: 4222  # client
+            - containerPort: 8222  # monitoring
+          volumeMounts:
+            - name: data
+              mountPath: /data/nats
+      volumes:
+        - name: data
+          emptyDir: {}
