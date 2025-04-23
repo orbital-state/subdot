@@ -1,6 +1,6 @@
 # subdot
 
-A realtime event-routing framework to develop pubsub-like systems with payload filtering
+A realtime event-routing framework to develop pubsub-like systems with payload filtering.
 
 ## Use-cases and Examples
 
@@ -162,6 +162,6 @@ This will start a NATS JetStream server with the default ports exposed. You can 
 
 ## 📝 License
 
-MIT License.  
+Apache License 2.0  
 Open-source.  
 Built with ❤️ for the blockchain ecosystem.
