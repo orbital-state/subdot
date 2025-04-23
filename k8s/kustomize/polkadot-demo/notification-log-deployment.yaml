@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-log
+  namespace: subdot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-log
+  template:
+    metadata:
+      labels:
+        app: notification-log
+    spec:
+      containers:
+        - name: notification-log
+          image: your-image:latest
+          command: ["nats", "sub", "notification.*", "--ack"]
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "250m"

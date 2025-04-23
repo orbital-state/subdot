@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subdot-manager
+  namespace: subdot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subdot-manager
+  template:
+    metadata:
+      labels:
+        app: subdot-manager
+    spec:
+      containers:
+        - name: subdot-manager
+          image: your-image:latest
+          command: ["subdot-manager"]
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

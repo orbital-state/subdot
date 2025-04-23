@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-sourcing
+  namespace: subdot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-sourcing
+  template:
+    metadata:
+      labels:
+        app: event-sourcing
+    spec:
+      containers:
+        - name: event-sourcing
+          image: your-image:latest
+          command: ["event-sourcing"]
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

@@ -1,0 +1,10 @@
+namespace: subdot
+
+bases:
+  - ../base
+
+resources:
+  - event-sourcing-deployment.yaml
+  - subdot-manager-deployment.yaml
+  - subdot-worker-deployment.yaml
+  - notification-log-deployment.yaml

@@ -6,8 +6,10 @@ A realtime event-routing framework to develop pubsub-like systems with payload f
 
 - `examples/basic/cli`: A simple CLI that pipes and filters events in bash-like fashion (very local perspective).
 
-- `examples/basic/local-k8s`: A local Kubernetes deployment of Subdot with a NATS JetStream server. This setup allows you to run Subdot in a Kubernetes cluster, making it suitable for production environments. Use-case still covers the local development perspective and mock data.
+- `examples/basic/local-k8s`: A local Kubernetes deployment of subdot with a NATS JetStream server. This setup allows you to run subdot in a Kubernetes cluster, making it suitable for production environments. Use-case still covers the local development perspective and mock data.
 
+
+- `examples/advanced/polkadot-demo`: A helm-based Kubernetes deployment of subdot with a NATS JetStream server. This example demonstrates how to use subdot in a more complex environment, where you can filter and route events so that they can be actioned upon.
 
 ---
 
@@ -79,7 +81,7 @@ Or with a specific source:
 npm run start -- --source ws://localhost:9944
 ```
 
-### Make Subdot Executable
+### Make subdot Executable
 
 To make `subdot` available as a global executable:
 
@@ -112,7 +114,7 @@ This will allow you to run `subdot` from anywhere in your terminal.
 
 ## Docker (Optional)
 
-To build a Docker image for Subdot, run:
+To build a Docker image for subdot, run:
 
 ```bash
 docker build -t subdot .
@@ -126,13 +128,13 @@ To run the Docker container, use:
 docker run -it --rm subdot
 ```
 
-This will start the Subdot CLI inside a Docker container.
+This will start the subdot CLI inside a Docker container.
 
 ---
 
 ## Kubernetes (Optional)
 
-To deploy Subdot on Kubernetes, you can use the provided Kustomize manifests. This will allow you to run Subdot in a Kubernetes cluster with Smoldot and NATS JetStream.
+To deploy subdot on Kubernetes, you can use the provided Kustomize manifests. This will allow you to run subdot in a Kubernetes cluster with Smoldot and NATS JetStream.
 
 To deploy, run:
 
@@ -140,13 +142,13 @@ To deploy, run:
 kubectl apply -k k8s/
 ```
 
-This will apply the Kustomize manifests in the `k8s/` directory, creating the necessary resources for Subdot.
+This will apply the Kustomize manifests in the `k8s/` directory, creating the necessary resources for subdot.
 
 ---
 
 ## NATS JetStream (Optional)
 
-Subdot uses NATS JetStream for durable message delivery and payload-based filtering. You can run a local NATS JetStream server for testing purposes.
+subdot uses NATS JetStream for durable message delivery and payload-based filtering. You can run a local NATS JetStream server for testing purposes.
 
 To start a NATS JetStream server locally, run:
 
