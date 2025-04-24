@@ -11,6 +11,18 @@ vi.mock('../../url/SmoldotUrlSchema.js', () => ({
 }));
 
 describe('SmoldotSourceSubstream - getWebSocketUrl', () => {
+  it('should return a valid ws:// URL also when path is empty string', () => {
+    (SmoldotUrlSchema.parse as ReturnType<typeof vi.fn>).mockReturnValue({
+      scheme: 'smoldot.ws',
+      host: 'example.com',
+      path: '',
+    });
+
+    const substream = new SmoldotSourceSubstream('smoldot.ws://example.com');
+    const wsUrl = substream['getWebSocketUrl']();
+    expect(wsUrl).toBe('ws://example.com');
+  });
+
   it('should return a valid ws:// URL', () => {
     (SmoldotUrlSchema.parse as ReturnType<typeof vi.fn>).mockReturnValue({
       scheme: 'smoldot.ws',

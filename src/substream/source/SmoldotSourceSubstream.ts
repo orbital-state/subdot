@@ -88,7 +88,10 @@ export class SmoldotSourceSubstream extends BufferedSourceSubstream<BasicEvent> 
   private getWebSocketUrl(): string {
     const scheme = String(this.parsedUrl.scheme).replace('smoldot.', ''); // Convert to string and remove "smoldot." prefix
     if (scheme === 'ws' || scheme === 'wss') {
-      const wsUrl = `${scheme}://${this.parsedUrl.host}`; // Only use the host, exclude the path and query string
+      let wsUrl = `${scheme}://${this.parsedUrl.host}`;
+      if (this.parsedUrl.path) {
+        wsUrl += this.parsedUrl.path; // Append the path if it exists
+      }
       logger.debug(`WebSocket URL resolved: ${wsUrl}`);
       return wsUrl;
     }

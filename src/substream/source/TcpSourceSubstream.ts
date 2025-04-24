@@ -5,24 +5,23 @@ import { BasicEvent } from '../../model/BasicEvent.js';
 import { SourceSubstream } from './SourceSubstream.js';
 import Config from '../../config/config.js';
 import { logger } from '../../utils/Logger.js';
+import { BufferedSourceSubstream } from './BufferedSourceSubstream.js';
 
-export class TcpSourceSubstream implements SourceSubstream {
-  private buffer: BasicEvent[] = [];
-  private resolveQueue: (() => void)[] = [];
-  private isDone = false;
-  private maxBufferSize: number = 10485760; // 10MB default
+export class TcpSourceSubstream extends BufferedSourceSubstream<BasicEvent> implements SourceSubstream {
   private socket?: ReturnType<typeof connect>;
   private rl?: readline.Interface;
+  private running = false;
 
   constructor(
     private readonly tcpUrl: string,
-    private readonly format: 'json' | 'plain' = 'json'
-  ) {}
+    private readonly format: 'json' | 'plain' = 'json',
+    maxBufferSize?: number // Optional parameter to override default buffer size
+  ) {
+    super(maxBufferSize); // Pass maxBufferSize to the parent class constructor
+  }
 
   async start(): Promise<void> {
     const configInstance = await Config.getInstance();
-    const config = configInstance.getConfig();
-    this.maxBufferSize = config.tcp?.maxsourcequeue || 10485760;
 
     const parsed = url.parse(this.tcpUrl);
     const hostname = parsed.hostname;
@@ -40,27 +39,34 @@ export class TcpSourceSubstream implements SourceSubstream {
       crlfDelay: Infinity,
     });
 
+    this.running = true;
+
     this.rl.on('line', (line) => {
       const data = this.format === 'json' ? this.safeParseJson(line) : line;
       if (data != null) {
-        this.enqueue(BasicEvent.from(data));
+        this.enqueueEvent(BasicEvent.from(data));
       }
     });
 
     this.rl.on('close', () => {
-      this.finish();
+      this.running = false;
+      logger.info('[TcpSourceSubstream] Connection closed.');
     });
 
     this.socket.on('error', (err) => {
       logger.error('[TcpSourceSubstream] Socket error:', err);
-      this.finish();
+      this.running = false;
     });
   }
 
   async stop(): Promise<void> {
-    this.finish();
-    this.rl?.close();
-    this.socket?.destroy();
+    try {
+      this.rl?.close();
+      this.socket?.destroy();
+      logger.info('[TcpSourceSubstream] Stopped.');
+    } finally {
+      this.running = false;
+    }
   }
 
   private safeParseJson(line: string): any | null {
@@ -72,32 +78,7 @@ export class TcpSourceSubstream implements SourceSubstream {
     }
   }
 
-  private enqueue(event: BasicEvent) {
-    if (this.buffer.length >= this.maxBufferSize) {
-      logger.warn('[TcpSourceSubstream] Buffer full, dropping event');
-      return;
-    }
-
-    this.buffer.push(event);
-    this.resolveQueue.forEach((resolve) => resolve());
-    this.resolveQueue = [];
-  }
-
-  private finish() {
-    this.isDone = true;
-    this.resolveQueue.forEach((resolve) => resolve());
-    this.resolveQueue = [];
-  }
-
-  async *[Symbol.asyncIterator](): AsyncIterator<BasicEvent> {
-    while (!this.isDone || this.buffer.length > 0) {
-      if (this.buffer.length === 0) {
-        await new Promise<void>((resolve) => this.resolveQueue.push(resolve));
-      }
-
-      while (this.buffer.length > 0) {
-        yield this.buffer.shift()!;
-      }
-    }
+  protected isRunning(): boolean {
+    return this.running;
   }
 }

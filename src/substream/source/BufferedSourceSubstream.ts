@@ -32,6 +32,14 @@ export abstract class BufferedSourceSubstream<E> {
     logger.info(`[BufferedSourceSubstream] Async iterator stopped.`);
   }
 
+  public getBufferSize(): number {
+    return this.eventQueue.getBufferSize();
+  }
+
+  public getQueueLength(): number {
+    return this.eventQueue.getQueueLength();
+  }
+
   // Subclasses should define this to indicate running state
   protected abstract isRunning(): boolean;
 }

@@ -36,4 +36,8 @@ export class BufferedQueue<T> {
   getBufferSize(): number {
     return this.currentBufferSize;
   }
+  
+  getQueueLength(): number {
+    return this.queue.length;
+  }
 }
