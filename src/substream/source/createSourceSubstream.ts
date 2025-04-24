@@ -41,7 +41,7 @@ export function createSourceSubstream(
   // SmoldotSourceSubstream
   if (sourceUrl?.startsWith('smoldot.ws://') || sourceUrl?.startsWith('smoldot.wss://')) {
     // Ensure the URL starts with smoldot.ws:// or smoldot.wss://
-    return new SmoldotSourceSubstream(sourceUrl, undefined, format);
+    return new SmoldotSourceSubstream(sourceUrl, format);
   }
 
   // // TcpSourceSubstream

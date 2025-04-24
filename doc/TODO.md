@@ -4,6 +4,7 @@
 ## Known issues
 - Fix `src/substream/source` to have separate substream source class with queue that has mem size limit rather than a length of the list
 
+- Implement an option of running a lightweight smoldot instance in the background, rather than connecting to rpc websocket.
 
 ## More testing
 - Do full end-to-end testing with a real chain
