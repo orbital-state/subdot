@@ -10,5 +10,8 @@ maxsourcequeue = 10485760 # 10MB in bytes
 [nats]
 maxsourcequeue = 10485760 # 10MB in bytes
 
+[smoldot]
+maxsourcequeue = 10485760 # 10MB in bytes
+
 [pubsub]
 servers = ["nats://nats:4222"]

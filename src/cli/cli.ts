@@ -56,7 +56,7 @@ export async function runCLI() {
     .description('Filter a stream of events')
     .option('-s, --source <url>', 'Source subdot URL to subscribe/listen to events')
     .option('-t, --target <url>', 'Target subdot URL to publish filtered events')
-    .option('-q, --query <filter>', 'Query to apply on stream events (e.g., $.type = "finalized")')
+    .option('-q, --query <filter>', 'Query to apply on stream events (e.g., $.type = "finalized")', 'true') // Default set to 'true' which means all events
     .option('-i, --input-format <format>', 'Input format (e.g., json)', 'json') // Default set to 'json'
     .option('-o, --output-format <format>', 'Output format (e.g., json)', 'json') // Default set to 'json'
     .action(async (options) => {

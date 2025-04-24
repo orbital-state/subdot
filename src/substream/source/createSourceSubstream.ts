@@ -1,6 +1,7 @@
 import { SourceSubstream } from './SourceSubstream.js';
 import { FileSourceSubstream } from './FileSourceSubstream.js';
 // import { TcpSourceSubstream } from './TcpSourceSubstream.js';
+import { SmoldotSourceSubstream } from './SmoldotSourceSubstream.js';
 import { existsSync } from 'fs';
 import { FileUrlSchema } from '../../url/FileUrlSchema.js';
 
@@ -35,6 +36,12 @@ export function createSourceSubstream(
       throw new Error(`[createSourceSubstream] File does not exist: ${parsed.fullPath}`);
     }
     return new FileSourceSubstream(parsed.fullPath, format);
+  }
+
+  // SmoldotSourceSubstream
+  if (sourceUrl?.startsWith('smoldot.ws://') || sourceUrl?.startsWith('smoldot.wss://')) {
+    // Ensure the URL starts with smoldot.ws:// or smoldot.wss://
+    return new SmoldotSourceSubstream(sourceUrl, undefined, format);
   }
 
   // // TcpSourceSubstream

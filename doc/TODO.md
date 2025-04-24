@@ -1,6 +1,10 @@
 
 # TODO:
 
+## Known issues
+- Fix `src/substream/source` to have separate substream source class with queue that has mem size limit rather than a length of the list
+
+
 ## More testing
 - Do full end-to-end testing with a real chain
 - Add a small "mock mode" that skips connecting to live chain.
