@@ -30,6 +30,82 @@ It is designed to evolve into a multi-service architecture supporting advanced a
 
 # Polkadot Streams
 
-Here some predefined streams:
+## Overview
+Subdot is designed to work with Substrate-based blockchains, particularly Polkadot and Kusama. It captures finalized events from the blockchain and routes them into NATS subjects for further processing.
 
+Subdot leverages NATS to route blockchain events into logically structured subject hierarchies. These subjects allow for flexible subscription and stream configuration, enabling selective listening and durable processing using JetStream.
 
+    💡 No need to pre-create NATS subjects: NATS subjects are dynamic. You can publish to any subject at any time — there's no need to predefine them. If you want to persist events, you can create a JetStream stream that binds to a wildcard subject (e.g., polkadot.events.>).
+
+## Subject Design Pattern
+
+Events are published with the subject format:
+
+polkadot.events.<section>.<method>
+
+    <section>: The Substrate pallet/module (e.g., balances, staking, system)
+
+    <method>: The event name inside that section (e.g., Transfer, Reward, ExtrinsicSuccess)
+
+This enables extremely granular control. You can:
+
+    Subscribe to everything: polkadot.events.>
+
+    Just balances events: polkadot.events.balances.*
+
+    Just transfers: polkadot.events.balances.Transfer
+
+    Only system events: polkadot.events.system.*
+
+    Only extrinsic failures: polkadot.events.system.ExtrinsicFailed
+
+## Predefined NATS Subjects (Polkadot)
+
+Below is more of a convention for the subject design pattern. You can use any subject you like, but we recommend using the following format for consistency and ease of use.
+
+    polkadot.events.<section>.<method> 
+
+Here are some useful combinations to start with:
+
+| Subject | Description |
+| ------- | ----------- |
+| ------- | ----------- |
+| polkadot.events.> | All finalized events from Polkadot |
+| polkadot.events.system.* | All system-level events like ExtrinsicSuccess, ExtrinsicFailed, NewAccount |   
+| ------- | ----------- |
+| polkadot.events.> | All finalized events from Polkadot |
+| polkadot.events.system.* | All system-level events like ExtrinsicSuccess, ExtrinsicFailed, NewAccount |
+| polkadot.events.system.ExtrinsicSuccess | Only successful extrinsic executions |
+| polkadot.events.system.ExtrinsicFailed | Only failed extrinsics |
+| polkadot.events.balances.Transfer | Token transfers between accounts |
+| polkadot.events.balances.* | All events from the Balances pallet |
+| polkadot.events.staking.Reward | Staking rewards paid to validators/nominators |
+| polkadot.events.staking.Slashed | Slashing events due to misbehavior |
+| polkadot.events.treasury.Proposed | New treasury proposals submitted |
+| polkadot.events.*.* | Any two-level wildcard for exploration purposes |
+
+    ✨ You can create a durable JetStream stream on any of these using nats stream add and a **subject filter**.
+
+## Example: Create a JetStream for only transfers
+
+```bash
+nats stream add polkadot_transfers \
+  --subjects "polkadot.events.balances.Transfer" \
+  --storage file \
+  --retention limits \
+  --max-age 48h
+```
+
+This keeps only the last 48 hours of Polkadot token transfer events.
+
+## Example: Create a JetStream for all events
+
+```bash
+nats stream add polkadot_all_events \
+  --subjects "polkadot.events.>" \
+  --storage file \
+  --retention limits \
+  --max-age 48h
+```
+
+This keeps only the last 48 hours of all Polkadot events, ensuring efficient storage and retrieval of event data.
