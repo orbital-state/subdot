@@ -4,33 +4,21 @@ import { NatsUrlSchema } from '../../url/NatsUrlSchema.js';
 import { BasicEvent } from '../../model/BasicEvent.js';
 import { logger } from '../../utils/Logger.js';
 
-export interface NatsTargetOptions {
-  url: string;
-  subjectPrefix: string;
-}
 
 export class NatsTargetSubstream implements TargetSubstream {
   private nc?: NatsConnection;
   private readonly url: string;
   private readonly sc = StringCodec();
-  private subjectPrefix: string;
 
-  constructor(_init: unknown, opts: NatsTargetOptions) {
-    this.url = opts.url;
-    this.subjectPrefix = this.parseSubjectPrefix(this.url);
-  }
-
-  private parseSubjectPrefix(url: string): string {
-    const parsed = NatsUrlSchema.parse(url);
-    // Normalize subjectPrefix: remove trailing . or .*
-    return parsed.subject.replace(/\.\*$/, '').replace(/\.$/, '');
+  constructor(url: string) {
+    this.url = url;
   }
 
   async start(): Promise<void> {
     const parsed = NatsUrlSchema.parse(this.url);
 
     const servers = parsed.getServers(); // Use getServers method
-    const subject = parsed.subject; // Use subject from NatsUrlSchema
+    const subjectPrefix = parsed.subjectPrefix; // Use subject from NatsUrlSchema
 
     this.nc = await connect({
       servers,
@@ -38,13 +26,18 @@ export class NatsTargetSubstream implements TargetSubstream {
       ...(parsed.pass && { pass: parsed.pass }),
     });
 
-    logger.info(`Connected to NATS server at ${servers}, using subject: ${subject}`);
+    logger.info(`Connected to NATS server at ${servers}, using subject: ${subjectPrefix}`);
   }
 
   private getSubject(event: BasicEvent): string {
     const section = event.payload?.section || 'unknown';
     const method = event.payload?.method || 'unknown';
     return `${this.subjectPrefix}.${section}.${method}`;
+  }
+
+  public get subjectPrefix(): string {
+    const parsed = NatsUrlSchema.parse(this.url);
+    return parsed.subjectPrefix;
   }
 
   async push(event: BasicEvent): Promise<void> {

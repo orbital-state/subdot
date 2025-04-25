@@ -100,7 +100,7 @@ export class SmoldotSourceSubstream extends BufferedSourceSubstream<BasicEvent> 
     throw new Error(errorMessage);
   }
 
-  protected isRunning(): boolean {
+  public isRunning(): boolean {
     return this.running; // Implement the abstract method from BufferedSourceSubstream
   }
 }

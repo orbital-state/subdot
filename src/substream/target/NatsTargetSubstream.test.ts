@@ -5,40 +5,30 @@ import { NatsUrlSchema } from '../../url/NatsUrlSchema.js';
 import { logger } from '../../utils/Logger.js';
 import { BasicEvent } from '../../model/BasicEvent.js';
 
-// filepath: src/substream/target/NatsTargetSubstream.test.ts
-
 vi.mock('nats', () => ({
     connect: vi.fn(),
     StringCodec: vi.fn(() => ({
-        encode: vi.fn(),
+        encode: vi.fn((value: string) => new TextEncoder().encode(value)), // Return Uint8Array
     })),
 }));
 
-vi.mock('../../url/NatsUrlSchema.js', () => ({
-    NatsUrlSchema: {
-        parse: vi.fn(),
-    },
-}));
-
-// don't mock the logger for now
-// vi.mock('../../utils/Logger.js', () => ({
-//     logger: {
-//         info: vi.fn(),
-//     },
-// }));
+vi.spyOn(logger, 'info'); // Mock logger.info
 
 describe('NatsTargetSubstream', () => {
-    const mockUrl = 'nats://user:pass@localhost:4222';
+    const mockUrl = 'nats://user:pass@localhost:4222/test/subject';
     const mockSubjectPrefix = 'test.subject';
-    const mockOptions = { url: mockUrl, subjectPrefix: mockSubjectPrefix };
     let substream: NatsTargetSubstream;
 
     beforeEach(() => {
-        substream = new NatsTargetSubstream({}, mockOptions);
+        substream = new NatsTargetSubstream(mockUrl);
     });
 
     afterEach(() => {
         vi.clearAllMocks();
+    });
+
+    it('should have non empty subject', () => {
+        expect(substream['subjectPrefix']).toBeTruthy();
     });
 
     it('should initialize with correct url and subjectPrefix', () => {
@@ -48,32 +38,28 @@ describe('NatsTargetSubstream', () => {
     });
 
     it('should parse and normalize subjectPrefix correctly', () => {
-        vi.mocked(NatsUrlSchema.parse).mockReturnValue({ subject: 'test.subject.*' });
-        const result = substream['parseSubjectPrefix'](mockUrl);
-        expect(result).toBe('test.subject');
+        const parsedSchema = NatsUrlSchema.parse(mockUrl);
+        console.log(parsedSchema.subjectPrefix);
+        expect(parsedSchema.subjectPrefix).toBe('test.subject');
+        expect(parsedSchema.getHost()).toBe('localhost');
+        expect(parsedSchema.user).toBe('user');
+        expect(parsedSchema.pass).toBe('pass');
     });
 
     it('should start and connect to NATS server', async () => {
-        const mockServers = ['nats://localhost:4222'];
-        vi.mocked(NatsUrlSchema.parse).mockReturnValue({
-            getServers: () => mockServers,
-            subject: 'test.subject',
-            user: 'user',
-            pass: 'pass',
-        });
+        const parsedSchema = NatsUrlSchema.parse(mockUrl);
         const mockConnection = { close: vi.fn() };
-        vi.mocked(connect).mockResolvedValue(mockConnection);
+        vi.mocked(connect).mockResolvedValue(mockConnection as any);
 
         await substream.start();
 
-        expect(NatsUrlSchema.parse).toHaveBeenCalledWith(mockUrl);
         expect(connect).toHaveBeenCalledWith({
-            servers: mockServers,
-            user: 'user',
-            pass: 'pass',
+            servers: parsedSchema.getServers(),
+            user: parsedSchema.user,
+            pass: parsedSchema.pass,
         });
         expect(logger.info).toHaveBeenCalledWith(
-            `Connected to NATS server at ${mockServers}, using subject: test.subject`
+            `Connected to NATS server at ${parsedSchema.getServers()}, using subject: ${parsedSchema.subjectPrefix}`
         );
         expect(substream['nc']).toBe(mockConnection);
     });

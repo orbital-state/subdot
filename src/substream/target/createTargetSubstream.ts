@@ -2,6 +2,7 @@ import { TargetSubstream } from './TargetSubstream.js';
 import { FileTargetSubstream } from './FileTargetSubstream.js';
 import { existsSync } from 'fs';
 import { FileUrlSchema } from '../../url/FileUrlSchema.js';
+import { NatsTargetSubstream } from './NatsTargetSubstream.js';
 
 /**
  * Creates a target substream based on the provided target URL.
@@ -36,10 +37,8 @@ export function createTargetSubstream(
 
   // `nats://`
   if (targetUrl.startsWith('nats://')) {
-    const { NatsTargetSubstream } = await import('./NatsTargetSubstream.js');
-    return new NatsTargetSubstream(undefined, { url: targetUrl, subjectPrefix: 'substreams' });
+    return new NatsTargetSubstream(targetUrl);
   }
-  NatsTargetSubstream
 
   // Future: add `kafka://`, `nats://`, etc.
   throw new Error(`[createTargetSubstream] Unsupported target: ${targetUrl}`);

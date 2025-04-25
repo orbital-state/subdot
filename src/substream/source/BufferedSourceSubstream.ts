@@ -9,14 +9,14 @@ export abstract class BufferedSourceSubstream<E> {
     this.eventQueue = new BufferedQueue<E>(maxBufferSize);
   }
 
-  protected enqueueEvent(event: E): void {
+  public enqueueEvent(event: E): void {
     const success = this.eventQueue.enqueue(event, this.calculateEventSize);
     if (!success) {
       logger.warn(`[BufferedSourceSubstream] Event dropped due to buffer limit.`);
     }
   }
 
-  protected calculateEventSize(event: E): number {
+  public calculateEventSize(event: E): number {
     return Buffer.byteLength(JSON.stringify(event), 'utf-8');
   }
 
@@ -41,5 +41,5 @@ export abstract class BufferedSourceSubstream<E> {
   }
 
   // Subclasses should define this to indicate running state
-  protected abstract isRunning(): boolean;
+  public abstract isRunning(): boolean;
 }

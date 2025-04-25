@@ -78,7 +78,7 @@ export class TcpSourceSubstream extends BufferedSourceSubstream<BasicEvent> impl
     }
   }
 
-  protected isRunning(): boolean {
+  public isRunning(): boolean {
     return this.running;
   }
 }
