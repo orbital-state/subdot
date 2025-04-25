@@ -6,6 +6,11 @@ import { UrlSchemaFactory } from '../../url/UrlSchemaFactory.js';
 import Config from '../../config/config.js';
 import { logger } from '../../utils/Logger.js';
 
+// TODO: 
+// - implement a proper backoff strategy for reconnections 
+// - use BUfferedSourceSubstream to handle backpressure
+// - implement a proper error handling strategy
+// - implement a proper logging strategy
 export class NatsSourceSubstream implements SourceSubstream {
   private connection?: NatsConnection;
   private subscription?: Subscription;

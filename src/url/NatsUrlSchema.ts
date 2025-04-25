@@ -26,6 +26,14 @@ export class NatsUrlSchema extends BaseUrlSchema {
         super('nats', host, port, user, pass, path, normalizedQuery);
     }
 
+    public get subject(): string {
+        return this.path?.replace(/^\//, '') || 'events';
+    }
+
+    getServers(): string {
+        return `${this.host}:${this.port || 4222}`;
+    }
+
     static parse(urlString: string): NatsUrlSchema {
         const url = new URL(urlString);
         return new NatsUrlSchema(

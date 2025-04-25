@@ -34,6 +34,13 @@ export function createTargetSubstream(
     return new FileTargetSubstream(parsed.fullPath, format);
   }
 
+  // `nats://`
+  if (targetUrl.startsWith('nats://')) {
+    const { NatsTargetSubstream } = await import('./NatsTargetSubstream.js');
+    return new NatsTargetSubstream(undefined, { url: targetUrl, subjectPrefix: 'substreams' });
+  }
+  NatsTargetSubstream
+
   // Future: add `kafka://`, `nats://`, etc.
   throw new Error(`[createTargetSubstream] Unsupported target: ${targetUrl}`);
 }

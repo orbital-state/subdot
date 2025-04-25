@@ -45,13 +45,15 @@ To run Subdot as an event source using Smoldot as a client and output events int
    subdot filter \
      --source smoldot.wss://rpc.polkadot.io \
      --query 'true' \
-     --target nats://localhost:4222 \
-     --target-subject 'polkadot.events.*' \
+     --target nats://localhost:4222/polkadot/events \
      --output-format json
    ```
 
    - `--source`: Specifies the Smoldot WebSocket endpoint (e.g., Polkadot mainnet).
    - `--query`: Filters events based on the provided JSONata query (e.g., all events if we query for true). This is the default behavior (if -q flag is omitted).
    - `--target`: Specifies the NATS server URL (e.g., `nats://localhost:4222`).
-   - `--target-subject`: Specifies the NATS subject to publish the events to (e.g., `smoldot.events.*`). Also see the section on [NATS subject design pattern](doc/polkadot.md#subject-design-pattern). Note that the subject is a wildcard subject, so you can use `*` to match any event type. So it becomes a prefix for the created subjects.
    - `--output-format`: Specifies the output format as JSON.
+
+There is no `--target-subject` option or similar, which can be replaced by the path URI in the `--target` option alone. So that **target-subject** uri part (or path) specifies the NATS subject to publish the events to (e.g., `/smoldot/events` -> `smoldot.events.*`). Also see the section on [NATS subject design pattern](doc/polkadot.md#subject-design-pattern). Note that the subject is a wildcard subject, so you can use `*` to match any event type. So it becomes a prefix for the created subjects. This means that the events will be published to the NATS subject derived from the path in the `--target` URI.
+
+For instance, `nats://localhost:4222/polkadot/events` implies that the events will be published to the `polkadot.events.*` subject (prefix) in NATS.
