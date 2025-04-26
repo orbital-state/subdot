@@ -5,36 +5,18 @@ import pkg from '../../package.json' with { type: 'json' };
 import { FilterCommand } from './command/FilterCommand.js';
 import { SubdotWorker, SubdotWorkerConfig } from '../pubsub/SubdotWorker.js';
 import { SubdotManager, SubdotManagerConfig } from '../pubsub/SubdotManager.js';
+
 const { version } = pkg;
 
-export async function runCLI() {
-  const program = new Command();
-
-  program
+export function getCliProgram(): Command {
+  const program = new Command()
     .name('subdot')
     .description('Subdot real-time event router CLI')
+    .version(version)
     .option('-v, --verbose', 'enable verbose logging')
-    .option('-c, --config <path>', 'set config file', 'subdot.toml')
-    .version(version);
+    .option('-c, --config <path>', 'set config file', 'subdot.toml');
 
-  // Parse options early to set log level
-  const options = program.opts();
-
-  // Set log level based on verbosity
-  if (options.verbose) {
-    setLogLevel('debug');
-    logger.debug('Verbose logging enabled');
-  }
-
-  // Load the configuration file
-  const configInstance = await Config.getInstance(options.verbose, options.config);
-  const config = configInstance.getConfig();
-
-  if (options.verbose) {
-    logger.debug('Loaded configuration:', config);
-  }
-
-  // Define commands
+  // Define the `config` command
   program
     .command('config')
     .description('Manage configuration')
@@ -51,14 +33,15 @@ export async function runCLI() {
       logger.info('Configuration management is not yet implemented.');
     });
 
+  // Define the `filter` command
   program
     .command('filter')
     .description('Filter a stream of events')
     .option('-s, --source <url>', 'Source subdot URL to subscribe/listen to events')
     .option('-t, --target <url>', 'Target subdot URL to publish filtered events')
-    .option('-q, --query <filter>', 'Query to apply on stream events (e.g., $.type = "finalized")', 'true') // Default set to 'true' which means all events
-    .option('-i, --input-format <format>', 'Input format (e.g., json)', 'json') // Default set to 'json'
-    .option('-o, --output-format <format>', 'Output format (e.g., json)', 'json') // Default set to 'json'
+    .option('-q, --query <filter>', 'Query to apply on stream events (e.g., $.type = "finalized")', 'true')
+    .option('-i, --input-format <format>', 'Input format (e.g., json)', 'json')
+    .option('-o, --output-format <format>', 'Output format (e.g., json)', 'json')
     .action(async (options) => {
       logger.debug('Running filter command with options:', options);
       const filter = new FilterCommand({
@@ -66,11 +49,12 @@ export async function runCLI() {
         source: options.source,
         target: options.target,
         inputFormat: options.inputFormat,
-        outputFormat: options.outputFormat
+        outputFormat: options.outputFormat,
       });
       await filter.run();
     });
 
+  // Define the `manager` command
   program
     .command('manager')
     .description('Run subdot subscription manager')
@@ -81,6 +65,7 @@ export async function runCLI() {
       await manager.run();
     });
 
+  // Define the `worker` command
   program
     .command('worker')
     .description('Run subdot filter worker')
@@ -91,6 +76,7 @@ export async function runCLI() {
       await worker.run();
     });
 
+  // Define the `tui` command
   program
     .command('tui')
     .description('Launch TUI for monitoring')
@@ -98,21 +84,45 @@ export async function runCLI() {
       logger.info('TUI monitoring is not yet implemented.');
     });
 
+  // Define the `help` command
   program
     .command('help [command]')
     .description('Show help information for a command')
     .action((cmd) => {
       if (cmd) {
-        program.commands.find(c => c.name() === cmd)?.help();
+        program.commands.find((c) => c.name() === cmd)?.help();
       } else {
         program.help();
       }
     });
 
-  if (!process.argv.slice(2).length) {
-    program.help(); // Show help if no command is provided
+  return program;
+}
+
+export async function runCLI(): Promise<void> {
+  const program = getCliProgram();
+
+  // Parse the command-line arguments
+  program.parse(process.argv);
+
+  const options = program.opts();
+
+  // Set log level based on verbosity
+  if (options.verbose) {
+    setLogLevel('debug');
+    logger.debug('Verbose logging enabled');
   }
 
-  // Must be at the end
-  program.parse(process.argv);
+  // Load the configuration file
+  const configInstance = await Config.getInstance(options.verbose, options.config);
+  const config = configInstance.getConfig();
+
+  if (options.verbose) {
+    logger.debug('Loaded configuration:', config);
+  }
+
+  // Show help if no command is provided
+  if (!process.argv.slice(2).length) {
+    program.help();
+  }
 }
