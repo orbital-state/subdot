@@ -4,3 +4,5 @@ resources:
   - nats.yaml
   - nats-svc.yaml
   - nats-configmap.yaml
+  - nui.yaml
+  - nui-svc.yaml

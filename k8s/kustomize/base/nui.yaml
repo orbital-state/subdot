@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nui
+  namespace: subdot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nui
+  # serviceName: "nui"
+  template:
+    metadata:
+      labels:
+        app: nui
+    spec:
+      containers:
+        - name: nui
+          image: ghcr.io/nats-nui/nui:latest
+          ports:
+            - containerPort: 31311
+          env:
+            - name: NATS_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-config
+                  key: NATS_URL
+          volumeMounts:
+            - name: db-volume
+              mountPath: /db
+      volumes:
+        - name: db-volume
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: db-volume
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
