@@ -44,6 +44,8 @@ export class NatsTargetSubstream implements TargetSubstream {
     if (!this.nc) throw new Error('NATS connection not initialized');
 
     const subject = this.getSubject(event);
+    // logger.debug(`Publishing event to NATS subject: ${subject}`);
+    // logger.debug(`Event data: ${JSON.stringify(event.toJSON())}`);
     await this.nc.publish(subject, this.sc.encode(event.toJSON()));
   }
 

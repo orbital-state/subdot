@@ -57,3 +57,17 @@ To run Subdot as an event source using Smoldot as a client and output events int
 There is no `--target-subject` option or similar, which can be replaced by the path URI in the `--target` option alone. So that **target-subject** uri part (or path) specifies the NATS subject to publish the events to (e.g., `/smoldot/events` -> `smoldot.events.*`). Also see the section on [NATS subject design pattern](doc/polkadot.md#subject-design-pattern). Note that the subject is a wildcard subject, so you can use `*` to match any event type. So it becomes a prefix for the created subjects. This means that the events will be published to the NATS subject derived from the path in the `--target` URI.
 
 For instance, `nats://localhost:4222/polkadot/events` implies that the events will be published to the `polkadot.events.*` subject (prefix) in NATS.
+
+3. Verify that the events data has reached the NATS server by subscribing to the subject using a NATS client. You can use the `nats` CLI or any NATS client library to subscribe to the subject and receive the events.
+
+```bash
+nats sub 'polkadot.events.>'
+```
+
+If something goes wrong, use `subdot -v` to enable debug-level logging and check the NATS server logs for any errors or connection issues. Ensure that the NATS server is running and accessible from your environment.
+
+## Summary
+
+This completes the "end-to-end event router" loop from chain → local event processor → NATS → subscriber.
+
+Finally, you can check `sourcing-flow.md` for a detailed description of the sourcing flow and the classes involved in the process.
