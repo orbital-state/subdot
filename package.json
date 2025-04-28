@@ -11,7 +11,7 @@
         "dev": "tsx watch src/index.ts",
         "node": "node dist/index.js",
         "clean": "rm -rf dist",
-        "prepare": "npm run build",
+        "prepare": "[ -z \"$NO_PREBUILD\" ] && npm run build || echo 'Skipping build due to NO_PREBUILD'",
         "test": "vitest",
         "lint": "eslint .",
         "format": "prettier --write ."
