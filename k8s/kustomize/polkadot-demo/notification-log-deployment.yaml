@@ -16,7 +16,7 @@ spec:
       containers:
         - name: notification-log
           image: natsio/nats-box:latest
-          command: ["nats", "sub", "notification.*", "--ack"]
+          command: ["nats", "sub", "notification.>", "--ack"]
           env:
             - name: NATS_URL
               valueFrom:
