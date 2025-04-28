@@ -15,8 +15,14 @@ spec:
     spec:
       containers:
         - name: subdot-manager
-          image: your-image:latest
-          command: ["subdot-manager"]
+          image: orbitalstate/subdot:latest
+          args: ["manager", "--config", "/app/subdot.toml"]
+          env:
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-config
+                  key: NATS_URL          
           resources:
             limits:
               memory: "256Mi"

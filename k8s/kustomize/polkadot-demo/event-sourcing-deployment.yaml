@@ -15,8 +15,15 @@ spec:
     spec:
       containers:
         - name: event-sourcing
-          image: your-image:latest
-          command: ["event-sourcing"]
+          image: orbitalstate/subdot:latest
+          args:
+            - "filter"
+            - "--source"
+            - "smoldot.wss://rpc.polkadot.io"
+            - "--query"
+            - "true"
+            - "--target"
+            - "nats://nats.subdot.svc.cluster.local:4222/polkadot.events"
           resources:
             limits:
               memory: "256Mi"

@@ -15,8 +15,14 @@ spec:
     spec:
       containers:
         - name: notification-log
-          image: your-image:latest
+          image: natsio/nats-box:latest
           command: ["nats", "sub", "notification.*", "--ack"]
+          env:
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-config
+                  key: NATS_URL
           resources:
             limits:
               memory: "128Mi"
