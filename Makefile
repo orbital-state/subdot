@@ -1,3 +1,8 @@
+# Ensure the Makefile stops on the first error
+SHELL := /bin/bash
+.ONESHELL:
+	set -e
+
 # Variables
 APP_NAME = subdot
 DOCKER_REPO = orbitalstate/$(APP_NAME)
@@ -24,10 +29,12 @@ docker-tag:
 docker-push: docker-tag
 	docker push $(DOCKER_REPO):$(VERSION)
 
+docker-all: docker-build docker-tag docker-push
+
 clean:
 	rm -rf node_modules dist
 
 # Convenience
-all: clean build docker-build docker-push
+all: clean build docker-build docker-tag docker-push
 
-.PHONY: build docker-build docker-run docker-tag docker-push clean all
+.PHONY: build docker-build docker-run docker-tag docker-push docker-all clean all
