@@ -37,8 +37,8 @@ export function getCliProgram(): Command {
   program
     .command('filter')
     .description('Filter a stream of events')
-    .option('-s, --source <url>', 'Source subdot URL to subscribe/listen to events')
-    .option('-t, --target <url>', 'Target subdot URL to publish filtered events')
+    .option('-s, --source <url>', 'Source subdot URL to subscribe/listen to events', process.env.SUBDOT_SOURCE || 'stdin')
+    .option('-t, --target <url>', 'Target subdot URL to publish filtered events', process.env.SUBDOT_TARGET || 'stdout')
     .option('-q, --query <filter>', 'Query to apply on stream events (e.g., $.type = "finalized")', 'true')
     .option('-i, --input-format <format>', 'Input format (e.g., json)', 'json')
     .option('-o, --output-format <format>', 'Output format (e.g., json)', 'json')
