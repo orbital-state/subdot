@@ -1,9 +1,7 @@
 namespace: subdot
 
-bases:
-  - ../base
-
 resources:
+  - ../nats
   - event-sourcing-deployment.yaml
   - subdot-manager-deployment.yaml
   - subdot-worker-deployment.yaml
