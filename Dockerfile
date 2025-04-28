@@ -14,10 +14,6 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 COPY . .
 RUN npm run build
 
-# Install the CLI globally (npm link creates a symlink in /usr/local/bin)
-# (Optional, uncomment if you want to use the CLI globally)
-# RUN npm link
-
 # Stage 2: Run
 FROM node:20-slim
 
