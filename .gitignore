@@ -55,3 +55,6 @@ jetstream-data/
 # Optional: Ignore dump files
 dump/**
 *.tar.gz
+
+# Obsidian
+.obsidian/**
