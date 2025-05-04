@@ -1,10 +1,7 @@
-
-# TODO:
-
 ## Known issues
 - Fix `src/substream/source` to have separate substream source class with queue that has mem size limit rather than a length of the list
-
 - Implement an option of running a lightweight smoldot instance in the background, rather than connecting to rpc websocket.
+- In `examples/basic/cli`, the output results in mutated message structure. Data is wrapped under the dictionary with `payload` key. This is not the expected behavior. The output should be the same as the input, but with the added `event` key. Only filtering is expected.
 
 ## More testing
 - Do full end-to-end testing with a real chain
