@@ -16,6 +16,7 @@ import {
   Subscription,
   SubscriptionOptions,
   PublishOptions,
+  StringCodec,
 } from "nats";
 import { IConnection } from "../api/connection.js";
 
@@ -49,7 +50,12 @@ export class NatsConnectionAdapter implements IConnection {
     data?: Uint8Array,
     opts?: PublishOptions
   ): void {
-    this.raw.publish(subject, data, opts);
+    if (typeof subject === "string") {
+      this.raw.publish(subject, data, opts);
+    } else {
+      const sc = StringCodec();
+      this.raw.publish(sc.decode(subject), data, opts);
+    }
   }
 
   jetstream(): JetStreamClient {
