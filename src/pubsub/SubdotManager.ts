@@ -2,6 +2,9 @@ import { JetStreamKvStore } from "./nats/kv_store.js";
 import { FilterJob } from "./api/job.js";
 import { CommandInterface } from "../cli/command/CommandInterface.js";
 import { JetStreamConnectionFactory } from "./nats/connection_factory.js";
+import { IConnection } from "./api/connection.js";
+import { StringCodec } from "nats";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Configuration class for SubdotManager.
@@ -17,12 +20,15 @@ export class SubdotManagerConfig {
 export class SubdotManager implements CommandInterface {
     private readonly kvKeyPrefix = "filters/";
     private kv: JetStreamKvStore<FilterJob>;
+    private conn: IConnection;
 
     private constructor(
         private readonly config: SubdotManagerConfig,
-        kv: JetStreamKvStore<FilterJob>
+        kv: JetStreamKvStore<FilterJob>,
+        conn: IConnection
     ) {
         this.kv = kv;
+        this.conn = conn;
     }
 
     /**
@@ -34,61 +40,65 @@ export class SubdotManager implements CommandInterface {
         const connFactory = new JetStreamConnectionFactory(config.natsUrl);
         const conn = await connFactory.create();
         const kv = new JetStreamKvStore<FilterJob>(conn, config.kvBucketName);
-        return new SubdotManager(config, kv);
+        return new SubdotManager(config, kv, conn);
     }
 
     async run(): Promise<void> {
         console.log("🚀 SubdotManager is running with config:", this.config);
-        // Possible interactive loop or listener here
+
+        const sub = this.conn.subscribe("subdot.manager.filters.new");
+        const sc = StringCodec();
+
+        (async () => {
+            for await (const msg of sub) {
+                try {
+                    const payload = sc.decode(msg.data);
+                    console.log("📥 Received new filter specification:", payload);
+
+                    const spec = JSON.parse(payload);
+                    const job: FilterJob = {
+                        id: spec.id || uuidv4(),
+                        createdAt: Date.now(),
+                        source: spec.source,
+                        target: spec.target,
+                        filter: typeof spec.filter === "string" ? { query: spec.filter } : spec.filter,
+                        inputFormat: spec.inputFormat || "json",
+                        outputFormat: spec.outputFormat || "json",
+                        heartbeatTtlMs: spec.heartbeatTtlMs || 60000
+                    };
+
+                    await this.createSubscription(job);
+                } catch (err) {
+                    console.error("❌ Error processing new filter message:", err);
+                }
+            }
+        })().catch((err) => console.error("❌ Subscription failed:", err));
     }
 
-    /**
-     * Creates a subscription for a given filter job.
-     * Stores the job in the KV store.
-     * @param job The filter job to subscribe to.
-     */
     async createSubscription(job: FilterJob): Promise<void> {
         const kvKey = this.kvKeyPrefix + job.id;
-
-        // Check if the subscription already exists
         const existingJob = await this.kv.get(kvKey);
         if (existingJob) {
             console.log(`⚠️ Subscription for job ${job.id} already exists.`);
             return;
         }
-
-        // Store the job in the KV store
         await this.kv.put(kvKey, job);
         console.log(`✅ Subscription created for job ${job.id}`);
     }
 
-    /**
-     * Removes a subscription for a given job ID.
-     * Deletes the job from the KV store.
-     * @param jobId The ID of the job to unsubscribe from.
-     */
     async removeSubscription(jobId: string): Promise<void> {
         const kvKey = this.kvKeyPrefix + jobId;
-
-        // Check if the subscription exists
         const existingJob = await this.kv.get(kvKey);
         if (!existingJob) {
             console.log(`⚠️ No active subscription found for job ${jobId}.`);
             return;
         }
-
-        // Remove the job from the KV store
         await this.kv.delete(kvKey);
         console.log(`🛑 Subscription removed for job ${jobId}`);
     }
 
-    /**
-     * Garbage-collects expired subscriptions based on their heartbeat TTL.
-     */
     async cleanupExpired(): Promise<void> {
         const now = Date.now();
-
-        // Watch all subscriptions and clean up expired ones
         await this.kv.watch(this.kvKeyPrefix, async (key, job) => {
             if (job && now - job.createdAt > job.heartbeatTtlMs) {
                 console.log(`⏳ Job ${key} has expired. Cleaning up...`);
@@ -97,9 +107,6 @@ export class SubdotManager implements CommandInterface {
         });
     }
 
-    /**
-     * Cleans up all active subscriptions.
-     */
     async cleanupAll(): Promise<void> {
         const keys = await this.kv.listKeys(this.kvKeyPrefix);
         for (const key of keys) {
@@ -108,10 +115,6 @@ export class SubdotManager implements CommandInterface {
         }
     }
 
-    /**
-     * Lists all active subscriptions.
-     * @returns A map of job IDs to FilterJobs.
-     */
     async listActiveSubscriptions(): Promise<Map<string, FilterJob>> {
         const keys = await this.kv.listKeys(this.kvKeyPrefix);
         const subscriptions = new Map<string, FilterJob>();

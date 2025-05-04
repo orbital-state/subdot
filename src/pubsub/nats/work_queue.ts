@@ -13,7 +13,7 @@ export class JetStreamWorkQueue<T extends IJob> implements IJobQueue<T> {
     ) { }
 
     async pull(timeoutMs = 1_000): Promise<T | null> {
-        const js = this.conn.raw.jetstream();
+        const js = this.conn.jetstream();
         const cons = await js.consumers.get(this.stream, this.consumer);
         const msgs = await cons.fetch({ max_messages: 1, expires: timeoutMs });
         for await (const m of msgs) {
