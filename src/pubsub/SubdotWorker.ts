@@ -2,7 +2,7 @@ import { CommandInterface } from "../cli/command/CommandInterface.js";
 import { JetStreamConnectionFactory } from "./nats/connection_factory.js";
 import { JetStreamKvStore } from "./nats/kv_store.js";
 import { JetStreamWorkQueue } from "./nats/work_queue.js";
-import { FilterManager } from "./runtime/filter_manager.js";
+import { FilterManager } from "./runtime/FilterManager.js";
 import { FilterWorker } from "./runtime/FilterWorker.js";
 import { FilterJob } from "./api/job.js";
 
