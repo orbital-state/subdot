@@ -15,6 +15,7 @@ export class SubdotManagerConfig {
     natsUrl = process.env.NATS_URL?.split(",") || ["nats://localhost:4222"];
     new_filter_subject = "subdot.manager.filters.new";
     workqueueSubject = process.env.SUBDOT_WORKQUEUE_SUBJECT || "subdot.workqueue";
+    orphanSubject = process.env.SUBDOT_ORPHAN_SUBJECT || "subdot.manager.filters.orphan";
 }
 
 /**
@@ -57,9 +58,13 @@ export class SubdotManager implements CommandInterface {
         const keys = await this.kv.listKeys(this.kvKeyPrefix);
         for (const key of keys) {
             const job = await this.kv.get(key);
-            if (job) {
+            // enqueue jobs not already RUNNING
+            if (job && job.status !== 'RUNNING') {
                 await js.publish(this.workqueueSubject, jc.encode(job));
                 console.log(`🔄 Enqueued pending job ${job.id}`);
+                // update status to RUNNING
+                job.status = 'RUNNING';
+                await this.kv.put(key, job);
             }
         }
     }
@@ -74,6 +79,8 @@ export class SubdotManager implements CommandInterface {
         // Enqueue existing subscriptions at startup and periodically
         await this.enqueuePendingJobs();
         setInterval(() => this.enqueuePendingJobs().catch(console.error), 30_000);
+        // periodic expiration check
+        setInterval(() => this.reportExpired().catch(console.error), 30_000);
         console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
 
         (async () => {
@@ -112,7 +119,8 @@ export class SubdotManager implements CommandInterface {
                         filter: typeof spec.filter === "string" ? { query: spec.filter } : spec.filter,
                         inputFormat: spec.inputFormat || "json",
                         outputFormat: spec.outputFormat || "json",
-                        heartbeatTtlMs: spec.heartbeatTtlMs || 60000
+                        heartbeatTtlMs: spec.heartbeatTtlMs || 60000,
+                        status: 'PENDING'
                     };
 
                     await this.createSubscription(job);
@@ -150,6 +158,8 @@ export class SubdotManager implements CommandInterface {
             return;
         }
         await this.kv.delete(kvKey);
+        // also delete heartbeat entry
+        await this.kv.delete(`heartbeat.${jobId}`);
         console.log(`🛑 Subscription removed for job ${jobId}`);
     }
 
@@ -157,19 +167,46 @@ export class SubdotManager implements CommandInterface {
      * Remove subscriptions that have exceeded their heartbeat TTL.
      */
     async reportExpired(): Promise<void> {
-        // report jobs as orphaned if they are not in the KV store
-        // and have not been updated for more than their heartbeat TTL
-        // report jobs as pending if they are in the KV store
-        // and have not been updated for more than their heartbeat TTL
         const now = Date.now();
-        await this.kv.watch(this.kvKeyPrefix, async (key, job) => {
-            if (job && now - job.createdAt > job.heartbeatTtlMs) {
-                console.log(`⏳ Job ${key} has expired. Cleaning up...`);
-                // Manager does not remove the subscription from the work-queue
-                // The user does that manually directly on the KV (job registry) or via nats announce
-                //await this.removeSubscription(key.replace(this.kvKeyPrefix, ""));
+        // 1) transition expired RUNNING jobs back to PENDING based on heartbeat
+        const jobKeys = await this.kv.listKeys(this.kvKeyPrefix);
+        for (const key of jobKeys) {
+            const job = await this.kv.get(key);
+            if (job && job.status === 'RUNNING') {
+                // check last heartbeat
+                const hbKey = `heartbeat.${job.id}`;
+                const hbEntry = await this.kv.getValue(hbKey);
+                const last = hbEntry ? parseInt(hbEntry.value.toString(), 10) : 0;
+                if (!hbEntry || now - last > job.heartbeatTtlMs) {
+                    job.status = 'PENDING';
+                    await this.kv.put(key, job);
+                    console.log(`⏳ Job ${job.id} heartbeat expired, status reset to PENDING`);
+                }
             }
-        });
+        }
+        // 2) detect orphan jobs: heartbeat exists but no subscription
+        const hbKeys = await this.kv.listKeys('heartbeat.');
+        const sc = StringCodec();
+        const js = this.conn.jetstream();
+        for (const hbKey of hbKeys) {
+            const hbEntry = await this.kv.getValue(hbKey);
+            if (!hbEntry) continue;
+            const last = parseInt(hbEntry.value.toString(), 10);
+            // if heartbeat recent (within default TTL)
+            if (now - last <= (60_000)) {
+                const jobId = hbKey.replace('heartbeat.', '');
+                const subKey = this.kvKeyPrefix + jobId;
+                const exists = await this.kv.get(subKey);
+                if (!exists) {
+                    // notify orphan job
+                    await js.publish(this.config.orphanSubject, sc.encode(jobId));
+                    console.log(`💀 Orphan job ${jobId}, sent kill notice`);
+                    // clean up stale heartbeat
+                    await this.kv.delete(hbKey);
+                    console.log(`🗑️  Cleaned up heartbeat for orphaned job ${jobId}`);
+                }
+            }
+        }
     }
 
     async cleanupAll(): Promise<void> {

@@ -56,6 +56,18 @@ export class FilterManager implements IManager<FilterJob> {
     this.workers.clear();
   }
 
+  /**
+   * Stop a specific worker by job ID, used for orphan kill handling.
+   */
+  async stopJob(id: string) {
+    const w = this.workers.get(id);
+    if (w) {
+      await w.stop();
+      this.workers.delete(id);
+      console.log(`🛑 Orphaned job ${id} stopped by manager`);
+    }
+  }
+
   activeJobs() {
     return this.workers;
   }

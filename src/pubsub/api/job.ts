@@ -23,4 +23,6 @@ export interface IJob {
     outputFormat?: string;  // defaults to "json"
   
     heartbeatTtlMs: number;
+
+    status: 'PENDING' | 'RUNNING' | 'ORPHAN';
   }

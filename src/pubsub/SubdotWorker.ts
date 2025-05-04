@@ -5,6 +5,7 @@ import { JetStreamWorkQueue } from "./nats/work_queue.js";
 import { FilterManager } from "./runtime/FilterManager.js";
 import { FilterWorker } from "./runtime/FilterWorker.js";
 import { FilterJob } from "./api/job.js";
+import { StringCodec } from "nats";
 
 /**
  * Configuration class for SubdotWorker.
@@ -14,6 +15,7 @@ export class SubdotWorkerConfig {
     streamName = process.env.SUBDOT_STREAM_NAME || "subdot_workqueue";
     consumerName = process.env.SUBDOT_CONSUMER_NAME || "subdot_worker_consumer";
     natsUrl = process.env.NATS_URL?.split(",") || ["nats://localhost:4222"];
+    orphanSubject = process.env.SUBDOT_ORPHAN_SUBJECT || "subdot.manager.filters.orphan";
 }
 
 /**
@@ -23,6 +25,7 @@ export class SubdotWorker implements CommandInterface {
     private kv: JetStreamKvStore | null = null;
     private queue: JetStreamWorkQueue<FilterJob> | null = null;
     private filterManager: FilterManager | null = null;
+    private natsConn: any; // raw NatsConnection
 
     private constructor(private config: SubdotWorkerConfig) {}
 
@@ -43,6 +46,7 @@ export class SubdotWorker implements CommandInterface {
     private async initialize(): Promise<void> {
         const connFactory = new NatsConnectionFactory(this.config.natsUrl);
         const conn = await connFactory.create();
+        this.natsConn = conn.raw; // store raw connection for subscriptions
         const js = conn.jetstream();
 
         this.kv = new JetStreamKvStore(conn, this.config.kvBucketName);
@@ -67,6 +71,19 @@ export class SubdotWorker implements CommandInterface {
      */
     async run(): Promise<void> {
         console.log("🚀 Starting SubdotWorker with config:", this.config);
+
+        // subscribe to orphan kill notices
+        const sc = StringCodec();
+        const orphanSub = this.natsConn.subscribe(this.config.orphanSubject);
+        (async () => {
+            for await (const msg of orphanSub) {
+                const jobId = sc.decode(msg.data);
+                console.log(`💀 Received orphan kill for job ${jobId}`);
+                if (this.filterManager) {
+                    await this.filterManager.stopJob(jobId);
+                }
+            }
+        })().catch(console.error);
 
         while (true) {
             const job = await this.queue!.pull(1_000);
