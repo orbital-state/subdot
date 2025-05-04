@@ -3,7 +3,7 @@ import { FilterJob } from "./api/job.js";
 import { CommandInterface } from "../cli/command/CommandInterface.js";
 import { NatsConnectionFactory } from "./nats/NatsConnectionFactory.js";
 import { IConnection } from "./api/connection.js";
-import { StringCodec } from "nats";
+import { StringCodec, JSONCodec } from "nats";
 import { v4 as uuidv4 } from "uuid";
 import { NatsUrlSchema } from "../url/NatsUrlSchema.js";
 
@@ -14,6 +14,7 @@ export class SubdotManagerConfig {
     kvBucketName = process.env.SUBDOT_KV_BUCKET_NAME || "subdot_filters"; // Shared with SubdotWorker
     natsUrl = process.env.NATS_URL?.split(",") || ["nats://localhost:4222"];
     new_filter_subject = "subdot.manager.filters.new";
+    workqueueSubject = process.env.SUBDOT_WORKQUEUE_SUBJECT || "subdot.workqueue";
 }
 
 /**
@@ -21,6 +22,7 @@ export class SubdotManagerConfig {
  */
 export class SubdotManager implements CommandInterface {
     private readonly kvKeyPrefix = "filters/";
+    private readonly workqueueSubject: string;
     private kv: JetStreamKvStore<FilterJob>;
     private conn: IConnection;
 
@@ -31,6 +33,7 @@ export class SubdotManager implements CommandInterface {
     ) {
         this.kv = kv;
         this.conn = conn;
+        this.workqueueSubject = config.workqueueSubject;
     }
 
     /**
@@ -45,6 +48,22 @@ export class SubdotManager implements CommandInterface {
         return new SubdotManager(config, kv, conn);
     }
 
+    /**
+     * Enqueue all subscriptions from KV into the JetStream work queue.
+     */
+    async enqueuePendingJobs(): Promise<void> {
+        const js = this.conn.jetstream();
+        const jc = JSONCodec<FilterJob>();
+        const keys = await this.kv.listKeys(this.kvKeyPrefix);
+        for (const key of keys) {
+            const job = await this.kv.get(key);
+            if (job) {
+                await js.publish(this.workqueueSubject, jc.encode(job));
+                console.log(`🔄 Enqueued pending job ${job.id}`);
+            }
+        }
+    }
+
     async run(): Promise<void> {
         console.log("🚀 SubdotManager is running with config:", this.config);
 
@@ -52,6 +71,9 @@ export class SubdotManager implements CommandInterface {
         const sub = this.conn.subscribe(subject);
         const sc = StringCodec();
 
+        // Enqueue existing subscriptions at startup and periodically
+        await this.enqueuePendingJobs();
+        setInterval(() => this.enqueuePendingJobs().catch(console.error), 30_000);
         console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
 
         (async () => {
@@ -108,8 +130,16 @@ export class SubdotManager implements CommandInterface {
             console.log(`⚠️ Subscription for job ${job.id} already exists.`);
             return;
         }
+
+        // 1) write into KV
         await this.kv.put(kvKey, job);
         console.log(`✅ Subscription created for job ${job.id}`);
+
+        // 2) enqueue into JetStream work-queue
+        const js = this.conn.jetstream();
+        const jc = JSONCodec<FilterJob>();
+        await js.publish(this.workqueueSubject, jc.encode(job));
+        console.log(`📨 Published job ${job.id} into work-queue`);
     }
 
     async removeSubscription(jobId: string): Promise<void> {
@@ -123,12 +153,21 @@ export class SubdotManager implements CommandInterface {
         console.log(`🛑 Subscription removed for job ${jobId}`);
     }
 
-    async cleanupExpired(): Promise<void> {
+    /**
+     * Remove subscriptions that have exceeded their heartbeat TTL.
+     */
+    async reportExpired(): Promise<void> {
+        // report jobs as orphaned if they are not in the KV store
+        // and have not been updated for more than their heartbeat TTL
+        // report jobs as pending if they are in the KV store
+        // and have not been updated for more than their heartbeat TTL
         const now = Date.now();
         await this.kv.watch(this.kvKeyPrefix, async (key, job) => {
             if (job && now - job.createdAt > job.heartbeatTtlMs) {
                 console.log(`⏳ Job ${key} has expired. Cleaning up...`);
-                await this.removeSubscription(key.replace(this.kvKeyPrefix, ""));
+                // Manager does not remove the subscription from the work-queue
+                // The user does that manually directly on the KV (job registry) or via nats announce
+                //await this.removeSubscription(key.replace(this.kvKeyPrefix, ""));
             }
         });
     }
