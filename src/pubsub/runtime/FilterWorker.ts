@@ -11,6 +11,7 @@ export class FilterWorker implements IWorker<FilterJob> {
   private readonly startedAt = Date.now();
   private readonly sc = StringCodec();
   private subscription: AsyncIterable<any> | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   constructor(
     public readonly job: FilterJob,
@@ -20,6 +21,12 @@ export class FilterWorker implements IWorker<FilterJob> {
 
   async start() {
     logger.info(`▶️  Starting job ${this.job.id}`);
+
+    // initial heartbeat and periodic schedule
+    await this.heartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.heartbeat().catch(err => logger.error(`💓 Heartbeat error for job ${this.job.id}`, err));
+    }, this.job.heartbeatTtlMs / 2);
 
     const rule = new JsonataFilterRule(this.job.filter?.query || "true");
     const processor = new BasicEventProcessor([rule]);
@@ -67,6 +74,11 @@ export class FilterWorker implements IWorker<FilterJob> {
 
   async stop(): Promise<void> {
     logger.info(`⏹️  Stopping job ${this.job.id}`);
+    // stop heartbeat timer
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     if (this.subscription) {
       // Optional cleanup logic
     }

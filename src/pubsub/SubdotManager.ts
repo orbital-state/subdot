@@ -85,7 +85,7 @@ export class SubdotManager implements CommandInterface {
         // periodic expiration check
         setInterval(() => this.reportExpired().catch(console.error), 30_000);
 
-        // Subscribe to new filter requests
+        // Handle and register new filter requests
         await this.handleSubscriptionRequests();
     }
 
