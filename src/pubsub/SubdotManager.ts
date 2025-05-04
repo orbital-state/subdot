@@ -13,6 +13,7 @@ import { NatsUrlSchema } from "../url/NatsUrlSchema.js";
 export class SubdotManagerConfig {
     kvBucketName = process.env.SUBDOT_KV_BUCKET_NAME || "subdot_filters"; // Shared with SubdotWorker
     natsUrl = process.env.NATS_URL?.split(",") || ["nats://localhost:4222"];
+    new_filter_subject = "subdot.manager.filters.new";
 }
 
 /**
@@ -47,8 +48,7 @@ export class SubdotManager implements CommandInterface {
     async run(): Promise<void> {
         console.log("🚀 SubdotManager is running with config:", this.config);
 
-        // TODO: put subject into config for subdot manager
-        const subject = "subdot.manager.filters.new";
+        const subject = this.config.new_filter_subject;
         const sub = this.conn.subscribe(subject);
         const sc = StringCodec();
 
