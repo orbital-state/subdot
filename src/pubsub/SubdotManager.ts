@@ -57,7 +57,14 @@ export class SubdotManager implements CommandInterface {
         const jc = JSONCodec<FilterJob>();
         const keys = await this.kv.listKeys(this.kvKeyPrefix);
         for (const key of keys) {
-            const job = await this.kv.get(key);
+            let job;
+            try {
+                job = await this.kv.get(key);
+            } catch (err) {
+                console.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
+                await this.kv.delete(key);
+                continue;
+            }
             // enqueue jobs not already RUNNING
             if (job && job.status !== 'RUNNING') {
                 await js.publish(this.workqueueSubject, jc.encode(job));
@@ -72,17 +79,23 @@ export class SubdotManager implements CommandInterface {
     async run(): Promise<void> {
         console.log("🚀 SubdotManager is running with config:", this.config);
 
-        const subject = this.config.new_filter_subject;
-        const sub = this.conn.subscribe(subject);
-        const sc = StringCodec();
-
         // Enqueue existing subscriptions at startup and periodically
         await this.enqueuePendingJobs();
         setInterval(() => this.enqueuePendingJobs().catch(console.error), 30_000);
         // periodic expiration check
         setInterval(() => this.reportExpired().catch(console.error), 30_000);
-        console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
 
+        // Subscribe to new filter requests
+        await this.handleSubscriptionRequests();
+    }
+
+    async handleSubscriptionRequests(): Promise<void> {
+        const subject = this.config.new_filter_subject;
+        const sub = this.conn.subscribe(subject);
+        const sc = StringCodec();
+
+        console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
+        console.log(`📬 Waiting for new filter specifications...`);
         (async () => {
             for await (const msg of sub) {
                 try {
@@ -133,7 +146,13 @@ export class SubdotManager implements CommandInterface {
 
     async createSubscription(job: FilterJob): Promise<void> {
         const kvKey = this.kvKeyPrefix + job.id;
-        const existingJob = await this.kv.get(kvKey);
+        let existingJob;
+        try {
+            existingJob = await this.kv.get(kvKey);
+        } catch (err) {
+            console.warn(`⚠️ Corrupted entry at ${kvKey}, deleting and recreating.`, err);
+            await this.kv.delete(kvKey);
+        }
         if (existingJob) {
             console.log(`⚠️ Subscription for job ${job.id} already exists.`);
             return;
@@ -171,7 +190,14 @@ export class SubdotManager implements CommandInterface {
         // 1) transition expired RUNNING jobs back to PENDING based on heartbeat
         const jobKeys = await this.kv.listKeys(this.kvKeyPrefix);
         for (const key of jobKeys) {
-            const job = await this.kv.get(key);
+            let job;
+            try {
+                job = await this.kv.get(key);
+            } catch (err) {
+                console.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
+                await this.kv.delete(key);
+                continue;
+            }
             if (job && job.status === 'RUNNING') {
                 // check last heartbeat
                 const hbKey = `heartbeat.${job.id}`;
