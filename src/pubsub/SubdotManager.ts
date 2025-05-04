@@ -5,6 +5,7 @@ import { NatsConnectionFactory } from "./nats/NatsConnectionFactory.js";
 import { IConnection } from "./api/connection.js";
 import { StringCodec } from "nats";
 import { v4 as uuidv4 } from "uuid";
+import { NatsUrlSchema } from "../url/NatsUrlSchema.js";
 
 /**
  * Configuration class for SubdotManager.
@@ -51,6 +52,8 @@ export class SubdotManager implements CommandInterface {
         const sub = this.conn.subscribe(subject);
         const sc = StringCodec();
 
+        console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
+
         (async () => {
             for await (const msg of sub) {
                 try {
@@ -58,11 +61,32 @@ export class SubdotManager implements CommandInterface {
                     console.log("📥 Received new filter specification:", payload);
 
                     const spec = JSON.parse(payload);
+
+                    // Convert NATS URL strings to SubjectConfig
+                    let sourceConfig = spec.source;
+                    if (typeof spec.source === 'string') {
+                        const natsSchema = NatsUrlSchema.validate(spec.source);
+                        const q = (natsSchema.getQuery() as Record<string,string> | undefined) ?? {};
+                        sourceConfig = {
+                            subject: natsSchema.subjectPrefix,
+                            useJetStream: q.useJetStream === 'true'
+                        };
+                    }
+                    let targetConfig = spec.target;
+                    if (typeof spec.target === 'string') {
+                        const natsSchema = NatsUrlSchema.validate(spec.target);
+                        const q = (natsSchema.getQuery() as Record<string,string> | undefined) ?? {};
+                        targetConfig = {
+                            subject: natsSchema.subjectPrefix,
+                            useJetStream: q.useJetStream === 'true'
+                        };
+                    }
+
                     const job: FilterJob = {
                         id: spec.id || uuidv4(),
                         createdAt: Date.now(),
-                        source: spec.source,
-                        target: spec.target,
+                        source: sourceConfig,
+                        target: targetConfig,
                         filter: typeof spec.filter === "string" ? { query: spec.filter } : spec.filter,
                         inputFormat: spec.inputFormat || "json",
                         outputFormat: spec.outputFormat || "json",

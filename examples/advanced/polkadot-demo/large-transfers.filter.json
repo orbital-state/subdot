@@ -1,0 +1,10 @@
+{
+    "id": "large-polkadot-transfers",
+    "source": "nats://nats:4222?subject=polkadot.events",
+    "target": "nats://nats:4222?subject=polkadot.events.large_transfers",
+    "filter": "event.section = 'balances' and event.method = 'Transfer' and $number(event.data[2]) > 1000000000000000",
+    "inputFormat": "json",
+    "outputFormat": "json",
+    "heartbeatTtlMs": 120000
+  }
+  
