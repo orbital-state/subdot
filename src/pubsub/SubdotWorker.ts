@@ -1,5 +1,5 @@
 import { CommandInterface } from "../cli/command/CommandInterface.js";
-import { JetStreamConnectionFactory } from "./nats/connection_factory.js";
+import { NatsConnectionFactory } from "./nats/NatsConnectionFactory.js";
 import { JetStreamKvStore } from "./nats/kv_store.js";
 import { JetStreamWorkQueue } from "./nats/work_queue.js";
 import { FilterManager } from "./runtime/FilterManager.js";
@@ -41,9 +41,9 @@ export class SubdotWorker implements CommandInterface {
      * Initializes the worker by setting up connections, key-value store, and job queue.
      */
     private async initialize(): Promise<void> {
-        const connFactory = new JetStreamConnectionFactory(this.config.natsUrl);
+        const connFactory = new NatsConnectionFactory(this.config.natsUrl);
         const conn = await connFactory.create();
-        const js = conn.raw.jetstream();
+        const js = conn.jetstream();
 
         this.kv = new JetStreamKvStore(conn, this.config.kvBucketName);
         this.queue = new JetStreamWorkQueue<FilterJob>(

@@ -1,56 +1,6 @@
-import {
-  connect,
-  NatsConnection,
-  JetStreamClient,
-  Subscription,
-  SubscriptionOptions,
-  PublishOptions,
-} from "nats";
-import { IConnection, IConnectionFactory } from "../api/connection.js";
+/**
+ * @deprecated
+ * This file is deprecated. Use NatsConnectionAdapter and NatsConnectionFactory instead.
+ */
 
-export class JetStreamConnection implements IConnection {
-    private _nc?: NatsConnection;
-    constructor(private readonly servers: string[]) {}
-
-    get raw(): NatsConnection {
-        if (!this._nc) throw new Error("Not connected");
-        return this._nc;
-    }
-    get connected(): boolean {
-      return !!this._nc && !this._nc.isClosed();
-    }
-
-    async connect(): Promise<IConnection> {
-        if (!this._nc) {
-            this._nc = await connect({ servers: this.servers });
-        }
-        return this;
-    }
-
-    subscribe(subject: string, opts?: SubscriptionOptions): Subscription {
-        return this.raw.subscribe(subject, opts);
-    }
-
-    publish(subject: string | Uint8Array, data?: Uint8Array, opts?: PublishOptions): void {
-        this.raw.publish(subject, data, opts);
-    }
-
-    jetstream(): JetStreamClient {
-        return this.raw.jetstream();
-    }
-
-    async close(): Promise<void> {
-        await this._nc?.close();
-    }
-
-    onClosed(cb: (err?: Error) => void): void {
-        this._nc?.closed().then(() => cb()).catch(cb);
-    }
-}
-
-export class JetStreamConnectionFactory implements IConnectionFactory {
-    constructor(private readonly servers: string[]) {}
-    async create(): Promise<IConnection> {
-        return new JetStreamConnection(this.servers).connect();
-    }
-}
+export {};

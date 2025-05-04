@@ -1,7 +1,7 @@
 import { JetStreamKvStore } from "./nats/kv_store.js";
 import { FilterJob } from "./api/job.js";
 import { CommandInterface } from "../cli/command/CommandInterface.js";
-import { JetStreamConnectionFactory } from "./nats/connection_factory.js";
+import { NatsConnectionFactory } from "./nats/NatsConnectionFactory.js";
 import { IConnection } from "./api/connection.js";
 import { StringCodec } from "nats";
 import { v4 as uuidv4 } from "uuid";
@@ -37,7 +37,7 @@ export class SubdotManager implements CommandInterface {
      * @returns An instance of SubdotManager.
      */
     static async create(config: SubdotManagerConfig): Promise<SubdotManager> {
-        const connFactory = new JetStreamConnectionFactory(config.natsUrl);
+        const connFactory = new NatsConnectionFactory(config.natsUrl);
         const conn = await connFactory.create();
         const kv = new JetStreamKvStore<FilterJob>(conn, config.kvBucketName);
         return new SubdotManager(config, kv, conn);
@@ -46,7 +46,9 @@ export class SubdotManager implements CommandInterface {
     async run(): Promise<void> {
         console.log("🚀 SubdotManager is running with config:", this.config);
 
-        const sub = this.conn.subscribe("subdot.manager.filters.new");
+        // TODO: put subject into config for subdot manager
+        const subject = "subdot.manager.filters.new";
+        const sub = this.conn.subscribe(subject);
         const sc = StringCodec();
 
         (async () => {
