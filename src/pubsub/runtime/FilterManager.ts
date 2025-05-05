@@ -37,7 +37,8 @@ export class FilterManager implements IManager<FilterJob> {
   async launch(job: FilterJob) {
     if (this.workers.has(job.id)) return;
     const w = await this.factory.create(job);
-    await w.start();
+    // fire-and-forget
+    w.start().catch(err => console.error(`❌ worker ${job.id} error:`, err));
     this.workers.set(job.id, w);
   }
 

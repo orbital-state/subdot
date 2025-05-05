@@ -6,6 +6,7 @@ import { IConnection } from "./api/connection.js";
 import { StringCodec, JSONCodec } from "nats";
 import { v4 as uuidv4 } from "uuid";
 import { NatsUrlSchema } from "../url/NatsUrlSchema.js";
+import { logger } from "../utils/Logger.js";
 
 /**
  * Configuration class for SubdotManager.
@@ -22,7 +23,7 @@ export class SubdotManagerConfig {
  * Manages Subdot subscriptions using a KV store.
  */
 export class SubdotManager implements CommandInterface {
-    private readonly kvKeyPrefix = "filters/";
+    private readonly kvFiltersKeyPrefix = "filters.";
     private readonly workqueueSubject: string;
     private kv: JetStreamKvStore<FilterJob>;
     private conn: IConnection;
@@ -53,23 +54,36 @@ export class SubdotManager implements CommandInterface {
      * Enqueue all subscriptions from KV into the JetStream work queue.
      */
     async enqueuePendingJobs(): Promise<void> {
+        logger.info(`enqueuePendingJobs triggered`);
         const js = this.conn.jetstream();
         const jc = JSONCodec<FilterJob>();
-        const keys = await this.kv.listKeys(this.kvKeyPrefix);
+        const keys = await this.kv.listKeys(this.kvFiltersKeyPrefix);
+
         for (const key of keys) {
             let job;
             try {
                 job = await this.kv.get(key);
             } catch (err) {
-                console.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
+                logger.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
                 await this.kv.delete(key);
                 continue;
             }
-            // enqueue jobs not already RUNNING
-            if (job && job.status !== 'RUNNING') {
+
+            // Only enqueue jobs that are PENDING and not receiving heartbeats
+            if (job && job.status === 'PENDING') {
+                const hbKey = `heartbeat.${job.id}`;
+                const hbEntry = await this.kv.getValue(hbKey);
+                const now = Date.now();
+                const lastHeartbeat = hbEntry ? parseInt(hbEntry.value.toString(), 10) : 0;
+
+                if (hbEntry && now - lastHeartbeat <= job.heartbeatTtlMs) {
+                    logger.info(`⏳ Skipping job ${job.id} as it is receiving heartbeats.`);
+                    continue;
+                }
+
                 await js.publish(this.workqueueSubject, jc.encode(job));
-                console.log(`🔄 Enqueued pending job ${job.id}`);
-                // update status to RUNNING
+                logger.info(`🔄 Enqueued pending job ${job.id}`);
+                // Update status to RUNNING
                 job.status = 'RUNNING';
                 await this.kv.put(key, job);
             }
@@ -77,13 +91,18 @@ export class SubdotManager implements CommandInterface {
     }
 
     async run(): Promise<void> {
-        console.log("🚀 SubdotManager is running with config:", this.config);
+        logger.info("🚀 SubdotManager is running with config:", this.config);
 
         // Enqueue existing subscriptions at startup and periodically
         await this.enqueuePendingJobs();
-        setInterval(() => this.enqueuePendingJobs().catch(console.error), 30_000);
+        setInterval(() => {
+            this.enqueuePendingJobs().catch(logger.error);
+        }, 30_000);
+
         // periodic expiration check
-        setInterval(() => this.reportExpired().catch(console.error), 30_000);
+        setInterval(() => {
+            this.reportExpired().catch(logger.error);
+        }, 30_000);
 
         // Handle and register new filter requests
         await this.handleSubscriptionRequests();
@@ -94,13 +113,13 @@ export class SubdotManager implements CommandInterface {
         const sub = this.conn.subscribe(subject);
         const sc = StringCodec();
 
-        console.log(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
-        console.log(`📬 Waiting for new filter specifications...`);
+        logger.info(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
+        logger.info(`📬 Waiting for new filter specifications...`);
         (async () => {
             for await (const msg of sub) {
                 try {
                     const payload = sc.decode(msg.data);
-                    console.log("📥 Received new filter specification:", payload);
+                    logger.info("📥 Received new filter specification:", payload);
 
                     const spec = JSON.parse(payload);
 
@@ -108,7 +127,7 @@ export class SubdotManager implements CommandInterface {
                     let sourceConfig = spec.source;
                     if (typeof spec.source === 'string') {
                         const natsSchema = NatsUrlSchema.validate(spec.source);
-                        const q = (natsSchema.getQuery() as Record<string,string> | undefined) ?? {};
+                        const q = (natsSchema.getQuery() as Record<string, string> | undefined) ?? {};
                         sourceConfig = {
                             subject: natsSchema.subjectPrefix,
                             useJetStream: q.useJetStream === 'true'
@@ -117,7 +136,7 @@ export class SubdotManager implements CommandInterface {
                     let targetConfig = spec.target;
                     if (typeof spec.target === 'string') {
                         const natsSchema = NatsUrlSchema.validate(spec.target);
-                        const q = (natsSchema.getQuery() as Record<string,string> | undefined) ?? {};
+                        const q = (natsSchema.getQuery() as Record<string, string> | undefined) ?? {};
                         targetConfig = {
                             subject: natsSchema.subjectPrefix,
                             useJetStream: q.useJetStream === 'true'
@@ -138,67 +157,70 @@ export class SubdotManager implements CommandInterface {
 
                     await this.createSubscription(job);
                 } catch (err) {
-                    console.error("❌ Error processing new filter message:", err);
+                    logger.error("❌ Error processing new filter message:", err);
                 }
             }
-        })().catch((err) => console.error("❌ Subscription failed:", err));
+        })().catch((err) => logger.error("❌ Subscription failed:", err));
     }
 
     async createSubscription(job: FilterJob): Promise<void> {
-        const kvKey = this.kvKeyPrefix + job.id;
+        const kvKey = this.kvFiltersKeyPrefix + job.id;
         let existingJob;
         try {
             existingJob = await this.kv.get(kvKey);
         } catch (err) {
-            console.warn(`⚠️ Corrupted entry at ${kvKey}, deleting and recreating.`, err);
+            logger.warn(`⚠️ Corrupted entry at ${kvKey}, deleting and recreating.`, err);
             await this.kv.delete(kvKey);
         }
         if (existingJob) {
-            console.log(`⚠️ Subscription for job ${job.id} already exists.`);
+            logger.warn(`⚠️ Subscription for job ${job.id} already exists.`);
             return;
         }
 
         // 1) write into KV
         await this.kv.put(kvKey, job);
-        console.log(`✅ Subscription created for job ${job.id}`);
+        logger.info(`✅ Subscription created for job ${job.id}`);
 
         // 2) enqueue into JetStream work-queue
         const js = this.conn.jetstream();
         const jc = JSONCodec<FilterJob>();
         await js.publish(this.workqueueSubject, jc.encode(job));
-        console.log(`📨 Published job ${job.id} into work-queue`);
+        logger.info(`📨 Published job ${job.id} into work-queue`);
     }
 
     async removeSubscription(jobId: string): Promise<void> {
-        const kvKey = this.kvKeyPrefix + jobId;
+        const kvKey = this.kvFiltersKeyPrefix + jobId;
         const existingJob = await this.kv.get(kvKey);
         if (!existingJob) {
-            console.log(`⚠️ No active subscription found for job ${jobId}.`);
+            logger.warn(`⚠️ No active subscription found for job ${jobId}.`);
             return;
         }
         await this.kv.delete(kvKey);
         // also delete heartbeat entry
         await this.kv.delete(`heartbeat.${jobId}`);
-        console.log(`🛑 Subscription removed for job ${jobId}`);
+        logger.info(`🛑 Subscription removed for job ${jobId}`);
     }
 
     /**
      * Remove subscriptions that have exceeded their heartbeat TTL.
      */
     async reportExpired(): Promise<void> {
+        logger.info(`reportExpired triggered`);
         const now = Date.now();
         // 1) transition expired RUNNING jobs back to PENDING based on heartbeat
-        const jobKeys = await this.kv.listKeys(this.kvKeyPrefix);
+        const jobKeys = await this.kv.listKeys(this.kvFiltersKeyPrefix);
+        logger.info(`Found ${jobKeys.length} job keys`);
         for (const key of jobKeys) {
+            logger.info(`Checking job ${key}`);
             let job;
             try {
                 job = await this.kv.get(key);
             } catch (err) {
-                console.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
+                logger.warn(`⚠️ Corrupted entry at ${key}, deleting.`, err);
                 await this.kv.delete(key);
                 continue;
             }
-            if (job && job.status === 'RUNNING') {
+            if (job && (job.status === 'RUNNING' || job.status === 'PENDING')) {
                 // check last heartbeat
                 const hbKey = `heartbeat.${job.id}`;
                 const hbEntry = await this.kv.getValue(hbKey);
@@ -206,7 +228,15 @@ export class SubdotManager implements CommandInterface {
                 if (!hbEntry || now - last > job.heartbeatTtlMs) {
                     job.status = 'PENDING';
                     await this.kv.put(key, job);
-                    console.log(`⏳ Job ${job.id} heartbeat expired, status reset to PENDING`);
+                    logger.info(`⏳ Job ${job.id} heartbeat expired, status reset to PENDING`);
+                } else {
+                    if (job.status === 'PENDING') {
+                        job.status = 'RUNNING'; 
+                        await this.kv.put(key, job);
+                        logger.info(`🚀 Job ${job.id} status updated to RUNNING`);                        
+                    } else {
+                        logger.info(`💓 Job ${job.id} is still active and RUNNING, last heartbeat at ${last}`);
+                    }                    
                 }
             }
         }
@@ -221,36 +251,36 @@ export class SubdotManager implements CommandInterface {
             // if heartbeat recent (within default TTL)
             if (now - last <= (60_000)) {
                 const jobId = hbKey.replace('heartbeat.', '');
-                const subKey = this.kvKeyPrefix + jobId;
+                const subKey = this.kvFiltersKeyPrefix + jobId;
                 const exists = await this.kv.get(subKey);
                 if (!exists) {
                     // notify orphan job
                     await js.publish(this.config.orphanSubject, sc.encode(jobId));
-                    console.log(`💀 Orphan job ${jobId}, sent kill notice`);
+                    logger.info(`💀 Orphan job ${jobId}, sent kill notice`);
                     // clean up stale heartbeat
                     await this.kv.delete(hbKey);
-                    console.log(`🗑️  Cleaned up heartbeat for orphaned job ${jobId}`);
+                    logger.info(`🗑️  Cleaned up heartbeat for orphaned job ${jobId}`);
                 }
             }
         }
     }
 
     async cleanupAll(): Promise<void> {
-        const keys = await this.kv.listKeys(this.kvKeyPrefix);
+        const keys = await this.kv.listKeys(this.kvFiltersKeyPrefix);
         for (const key of keys) {
             await this.kv.delete(key);
-            console.log(`🛑 Subscription removed for key ${key}`);
+            logger.info(`🛑 Subscription removed for key ${key}`);
         }
     }
 
     async listActiveSubscriptions(): Promise<Map<string, FilterJob>> {
-        const keys = await this.kv.listKeys(this.kvKeyPrefix);
+        const keys = await this.kv.listKeys(this.kvFiltersKeyPrefix);
         const subscriptions = new Map<string, FilterJob>();
 
         for (const key of keys) {
             const job = await this.kv.get(key);
             if (job) {
-                subscriptions.set(key.replace(this.kvKeyPrefix, ""), job);
+                subscriptions.set(key.replace(this.kvFiltersKeyPrefix, ""), job);
             }
         }
 

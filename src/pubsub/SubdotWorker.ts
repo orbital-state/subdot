@@ -88,11 +88,12 @@ export class SubdotWorker implements CommandInterface {
         while (true) {
             const job = await this.queue!.pull(1_000);
             if (job) {
-                await this.filterManager!.launch(job);
+                // ack first so it doesn’t get redelivered
                 await this.queue!.ack(job);
-                // await this.filterManager!.logJobCompletion(job);
+                // launch asynchronously
+                this.filterManager!.launch(job).catch(console.error);
             }
-            await this.filterManager!.cleanupExpired(); // Ensure this is awaited
+            await this.filterManager!.cleanupExpired();
         }
     }
 }
