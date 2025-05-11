@@ -1,11 +1,12 @@
 import { FilterJob } from "../api/job.js";
 import { IKeyValueStore } from "../api/kv.js";
 import { IWorker } from "../api/worker.js";
-import { JetStreamClient, NatsConnection, StringCodec } from "nats";
+import { NatsConnection, StringCodec } from "nats";
 import { logger } from "../../utils/Logger.js";
 import { BasicEventProcessor } from "../../processor/BasicEventProcessor.js";
 import { JsonataFilterRule } from "../../filter/JsonataFilterRule.js";
 import { BasicEvent } from "../../model/BasicEvent.js";
+import { FilterRegistry } from "./FilterRegistry.js";
 
 export class FilterWorker implements IWorker<FilterJob> {
   private readonly startedAt = Date.now();
@@ -17,6 +18,7 @@ export class FilterWorker implements IWorker<FilterJob> {
     public readonly job: FilterJob,
     private readonly kv: IKeyValueStore,
     private readonly nats: NatsConnection,
+    private readonly registry: FilterRegistry // Add registry as a dependency
   ) {}
 
   async start() {
@@ -85,8 +87,8 @@ export class FilterWorker implements IWorker<FilterJob> {
   }
 
   async heartbeat(): Promise<void> {
-    if (this.kv && this.job.id) {
-      await this.kv.put(`heartbeat.${this.job.id}`, Date.now().toString());
+    if (this.job.id) {
+      await this.registry.heartbeat(this.job.id);
       logger.debug(`💓 Heartbeat sent for job ${this.job.id}`);
     }
   }

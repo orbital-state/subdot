@@ -21,7 +21,7 @@ This document captures the design and responsibilities around the filter registr
      1. Pulls jobs from the queue (`subdot.workqueue`).
      2. Launches a `FilterWorker` for each new job and acks the message; the manager already marked it `RUNNING`.
      3. Subscribes to orphan notifications (`subdot.manager.filters.orphan`); on receiving a `jobId`, calls `stop()` on that worker.
-     4. Periodically calls `cleanupExpired()` to stop local workers whose own heartbeat TTL expired.
+     4. Periodically calls `isExpired()` to stop local workers whose own heartbeat TTL expired.
 
 ## Key Concepts
 
@@ -48,3 +48,84 @@ This document captures the design and responsibilities around the filter registr
 - Default heartbeat TTL: `heartbeatTtlMs = 60000` (ms)
 
 This registry pattern ensures high availability and recoverability: if a manager or worker restarts, the backlog in KV is re-enqueued automatically, and workers always see the complete set of active subscriptions.
+
+## FilterRegistry
+
+Here’s the updated design for the `FilterRegistry` abstraction and how it fits into Subdot. This class centralizes all KV logic, simplifying higher-level components like `SubdotManager` and `SubdotWorker`.
+
+## 1. Responsibilities of `FilterRegistry`
+
+`FilterRegistry` is the single place to persist and query `FilterJob` records (and their heartbeats) in JetStream KV. It should:
+
+- Own and initialize the KV bucket (`subdot_filters`).
+- CRUD on filter jobs:
+  - Add new jobs (PENDING).
+  - Update existing jobs (status changes, metadata updates).
+  - Fetch a single job by ID.
+  - List jobs (optionally by status or key‐prefix).
+  - Delete jobs (and their heartbeats).
+- Heartbeats:
+  - Record a heartbeat timestamp for a job.
+  - Fetch last heartbeat.
+  - Delete expired or orphaned heartbeats.
+- Status helpers:
+  - Mark a job PENDING/RUNNING/ORPHAN.
+  - Query by status.
+
+By pushing all KV logic into this registry, higher-level components (the old `FilterManager`, `SubdotWorker`, future orchestrators) just call into a clean API to drive the work-queue, expiration, and orphan detection.
+
+## 2. Updated `FilterRegistry` API
+
+```typescript
+import { JetStreamKvStore } from "./nats/kv_store.js";
+import { FilterJob } from "../api/job.js";
+
+export class FilterRegistry {
+  constructor(private readonly kv: JetStreamKvStore<FilterJob>) {}
+
+  /** Ensure KV bucket exists (create or get). */
+  static async create(bucketName: string, js: JetStreamClient): Promise<FilterRegistry> { /* Implementation */ }
+
+  /** Add a new job under "filters.<id>" */
+  addJob(job: FilterJob): Promise<void>;
+
+  /** Overwrite an existing job (e.g., to update status) */
+  updateJob(job: FilterJob): Promise<void>;
+
+  /** Remove job and its heartbeat */
+  deleteJob(jobId: string): Promise<void>;
+
+  /** Fetch a job or null */
+  getJob(jobId: string): Promise<FilterJob | null>;
+
+  /** List all jobs (optionally filter by status) */
+  listJobs(status?: FilterJob["status"]): Promise<FilterJob[]>;
+
+  /** Record heartbeat.timestamp under "heartbeat.<id>" */
+  heartbeat(jobId: string, ts?: number): Promise<void>;
+
+  /** Return last heartbeat timestamp or null */
+  getLastHeartbeat(jobId: string): Promise<number | null>;
+
+  /** Delete a job’s heartbeat entry */
+  deleteHeartbeat(jobId: string): Promise<void>;
+
+  /** Find orphaned jobs (heartbeat exists but filter key missing) */
+  findOrphans(ttlMs: number): Promise<string[]>;
+}
+```
+
+### Integration Points
+
+- **SubdotManager** (control‐plane) will use:
+  - `registry.addJob()` when a new filter arrives.
+  - `registry.listJobs("PENDING")` to enqueue work.
+  - `registry.getLastHeartbeat()` + `registry.updateJob()` to reset expired jobs.
+  - `registry.findOrphans()` to publish orphan kill notices.
+
+- **SubdotWorker** (data‐plane) will use:
+  - `registry.heartbeat()` in each `FilterWorker`.
+  - `registry.getLastHeartbeat()` in its local cleanup loop.
+  - `registry.deleteHeartbeat()` when a job is deleted.
+
+This updated design ensures that all KV-related logic is encapsulated within `FilterRegistry`, making the system more modular and maintainable.

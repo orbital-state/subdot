@@ -1,99 +1,69 @@
 import { CommandInterface } from "../cli/command/CommandInterface.js";
-import { NatsConnectionFactory } from "./nats/NatsConnectionFactory.js";
-import { JetStreamKvStore } from "./nats/kv_store.js";
-import { JetStreamWorkQueue } from "./nats/work_queue.js";
-import { FilterManager } from "./runtime/FilterManager.js";
+import { SubdotRuntime, SubdotConfig } from "./runtime/SubdotRuntime.js";
+import { FilterRegistry } from "./runtime/FilterRegistry.js";
 import { FilterWorker } from "./runtime/FilterWorker.js";
-import { FilterJob } from "./api/job.js";
 import { StringCodec } from "nats";
 
-/**
- * Configuration class for SubdotWorker.
- */
-export class SubdotWorkerConfig {
+export class SubdotWorkerConfig implements SubdotConfig {
     kvBucketName = process.env.SUBDOT_KV_BUCKET_NAME || "subdot_filters";
     streamName = process.env.SUBDOT_STREAM_NAME || "subdot_workqueue";
     consumerName = process.env.SUBDOT_CONSUMER_NAME || "subdot_worker_consumer";
+    workSubject = process.env.SUBDOT_WORKQUEUE_SUBJECT || "subdot.workqueue";
     natsUrl = process.env.NATS_URL?.split(",") || ["nats://localhost:4222"];
     orphanSubject = process.env.SUBDOT_ORPHAN_SUBJECT || "subdot.manager.filters.orphan";
+    heartbeatTtlMs = Number(process.env.HEARTBEAT_TTL_MS) || 60000;
 }
 
-/**
- * Unified SubdotWorker class that implements the worker functionality.
- */
 export class SubdotWorker implements CommandInterface {
-    private kv: JetStreamKvStore | null = null;
-    private queue: JetStreamWorkQueue<FilterJob> | null = null;
-    private filterManager: FilterManager | null = null;
-    private natsConn: any; // raw NatsConnection
+    private runtime: SubdotRuntime | null = null;
+    private registry: FilterRegistry | null = null;
+    private workers = new Map<string, FilterWorker>();
 
     private constructor(private config: SubdotWorkerConfig) {}
 
-    /**
-     * Static async constructor for SubdotWorker.
-     * @param config The configuration for SubdotWorker.
-     * @returns An instance of SubdotWorker.
-     */
     static async create(config: SubdotWorkerConfig): Promise<SubdotWorker> {
         const worker = new SubdotWorker(config);
         await worker.initialize();
         return worker;
     }
 
-    /**
-     * Initializes the worker by setting up connections, key-value store, and job queue.
-     */
     private async initialize(): Promise<void> {
-        const connFactory = new NatsConnectionFactory(this.config.natsUrl);
-        const conn = await connFactory.create();
-        this.natsConn = conn.raw; // store raw connection for subscriptions
-        const js = conn.jetstream();
-
-        this.kv = new JetStreamKvStore(conn, this.config.kvBucketName);
-        this.queue = new JetStreamWorkQueue<FilterJob>(
-            conn,
-            this.config.streamName,
-            this.config.consumerName
-        );
-
-        this.filterManager = new FilterManager(
-            {
-                create: async (job: FilterJob) => new FilterWorker(job, this.kv!, conn.raw),
-            },
-            js
-        );
-
-        await this.filterManager.initialize();
+        this.runtime = await SubdotRuntime.create(this.config);
+        this.registry = new FilterRegistry(this.runtime.kv, this.runtime.kv);
     }
 
-    /**
-     * Starts the worker process to continuously process jobs from the queue.
-     */
     async run(): Promise<void> {
         console.log("🚀 Starting SubdotWorker with config:", this.config);
-
-        // subscribe to orphan kill notices
         const sc = StringCodec();
-        const orphanSub = this.natsConn.subscribe(this.config.orphanSubject);
+        const orphanSub = this.runtime!.conn.subscribe(this.config.orphanSubject);
         (async () => {
             for await (const msg of orphanSub) {
                 const jobId = sc.decode(msg.data);
                 console.log(`💀 Received orphan kill for job ${jobId}`);
-                if (this.filterManager) {
-                    await this.filterManager.stopJob(jobId);
+                const worker = this.workers.get(jobId);
+                if (worker) {
+                    await worker.stop();
+                    this.workers.delete(jobId);
                 }
             }
         })().catch(console.error);
 
         while (true) {
-            const job = await this.queue!.pull(1_000);
+            const job = await this.runtime!.queue.pull(1_000);
             if (job) {
-                // ack first so it doesn’t get redelivered
-                await this.queue!.ack(job);
-                // launch asynchronously
-                this.filterManager!.launch(job).catch(console.error);
+                await this.runtime!.queue.ack(job);
+                const worker = new FilterWorker(job, this.runtime!.kv, this.runtime!.conn.raw, this.registry!);
+                this.workers.set(job.id, worker);
+                worker.start().catch(console.error);
             }
-            await this.filterManager!.cleanupExpired();
+            // Cleanup expired workers
+            const now = Date.now();
+            for (const [id, worker] of this.workers) {
+                if (await worker.isExpired(now)) {
+                    await worker.stop();
+                    this.workers.delete(id);
+                }
+            }
         }
     }
 }
