@@ -43,7 +43,7 @@ export class SubdotManager implements CommandInterface {
     }
 
     async enqueuePendingJobs(): Promise<void> {
-        logger.info(`enqueuePendingJobs triggered`);
+        logger.info(`🛠️ enqueuePendingJobs triggered`);
         const js = this.runtime.conn.jetstream();
         const jc = JSONCodec<FilterJob>();
         const jobs = await this.registry.listJobs("PENDING");
@@ -77,7 +77,7 @@ export class SubdotManager implements CommandInterface {
         const subject = this.config.new_filter_subject;
         const sub = this.runtime.conn.subscribe(subject);
         const sc = StringCodec();
-        logger.info(`▶️  Subscribed to ${subject} on ${this.config.natsUrl}`);
+        logger.info(`▶️ Subscribed to ${subject} on ${this.config.natsUrl}`);
         logger.info(`📬 Waiting for new filter specifications...`);
         (async () => {
             for await (const msg of sub) {
@@ -147,7 +147,7 @@ export class SubdotManager implements CommandInterface {
     }
 
     async reportExpired(): Promise<void> {
-        logger.info(`reportExpired triggered`);
+        logger.info(`📊 reportExpired triggered`);
         const now = Date.now();
         const jobs = await this.registry.listJobs();
         for (const job of jobs) {
