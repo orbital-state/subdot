@@ -8,6 +8,7 @@ A realtime event-routing framework to develop pubsub-like systems with payload f
 
 - `examples/basic/local-k8s`: A local Kubernetes deployment of subdot with a NATS JetStream server. This setup allows you to run subdot in a Kubernetes cluster, making it suitable for production environments. Use-case still covers the local development perspective and mock data.
 
+- `examples/advanced/smoldot-event-sourcing`: A local event sourcing example using Smoldot as a client. This example demonstrates how to source events from a Polkadot node and publish them to a NATS server. It includes a simple CLI command to filter events and output them in JSON format.
 
 - `examples/advanced/polkadot-demo`: A helm-based Kubernetes deployment of subdot with a NATS JetStream server. This example demonstrates how to use subdot in a more complex environment, where you can filter and route events so that they can be actioned upon.
 
@@ -157,6 +158,40 @@ docker run -d --name nats-dev -p 4222:4222 -p 8222:8222 nats -js
 ```
 
 This will start a NATS JetStream server with the default ports exposed. You can access the NATS Monitoring UI at [http://localhost:8222](http://localhost:8222).
+
+---
+
+## Running Integration Tests
+
+To run the integration tests for Subdot, follow these steps:
+
+1. **Ensure Prerequisites**:
+   - Make sure you have a Kubernetes cluster running (e.g., Minikube, Kind, or a cloud provider).
+   - Ensure `kubectl` is configured to point to your cluster.
+   - Install the required dependencies by running:
+     ```bash
+     npm install
+     ```
+
+2. **Run the Integration Tests**:
+   - Execute the following command to run the integration tests:
+     ```bash
+     npm run test:integration
+     ```
+
+   This will:
+   - Deploy the necessary NATS resources using Kubernetes.
+   - Start the Subdot Manager and Worker processes.
+   - Publish a filter specification to the NATS server.
+   - Simulate a Polkadot event and verify the filtered output.
+
+3. **Clean Up**:
+   - After the tests are complete, clean up the Kubernetes resources by running:
+     ```bash
+     kubectl delete -k k8s/kustomize/nats
+     ```
+
+   This ensures that no resources are left running in your cluster.
 
 ---
 
