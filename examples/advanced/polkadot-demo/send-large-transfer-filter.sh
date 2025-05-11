@@ -10,7 +10,6 @@ SUBJECT="subdot.manager.filters.new"
 # Check for empty NATS_URL and use default if unset
 if [ -z "${NATS_URL:-}" ]; then
   echo "Using default NATS URL: nats://nats:4222"
-  NATS_URL=${1:-nats://nats:4222}   # change if running locally
 else
   echo "Using NATS URL: $NATS_URL"
 fi
