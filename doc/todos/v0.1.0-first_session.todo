@@ -1,0 +1,10 @@
+# Outcome
+☐ Release the first version of the app as 0.1.0
+
+# Tasks
+☐ Test and fix SubdotWorker microservice
+☐ Complete the end-to-end tests
+☐ Draw diagram of the high-level architecture
+☐ Update and push latest version of the app as npm package
+☐ Update and push the docker image
+☐ Run the k8s end-to-end tests

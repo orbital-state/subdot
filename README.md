@@ -131,23 +131,41 @@ docker run -it --rm subdot
 
 This will start the subdot CLI inside a Docker container.
 
+However, please note that the same steps are already covered in the `Makefile`, so you can also use:
+
+```bash
+make docker
+```
+
+This will build the Docker image and run the container with the necessary configurations.
+
+If one want not only build but also tag and push the image to a registry, you can use:
+
+```bash
+make docker-all
+```
+
 ---
 
-## Kubernetes (Optional)
+## Optional Setup
+
+Next two steps are optional as `npm run test:integration` will run them automatically. So you can skip them if you are running the integration tests.
+
+### Local development with Kubernetes (Optional)
 
 To deploy subdot on Kubernetes, you can use the provided Kustomize manifests. This will allow you to run subdot in a Kubernetes cluster with Smoldot and NATS JetStream.
 
 To deploy, run:
 
 ```bash
-kubectl apply -k k8s/
+kubectl apply -k k8s/kustomize/nats
 ```
 
 This will apply the Kustomize manifests in the `k8s/` directory, creating the necessary resources for subdot.
 
----
+Then, it will forward the NATS service to your local machine, allowing you to connect to it.
 
-## NATS JetStream (Optional)
+### Local development with docker (Optional)
 
 subdot uses NATS JetStream for durable message delivery and payload-based filtering. You can run a local NATS JetStream server for testing purposes.
 
@@ -161,7 +179,9 @@ This will start a NATS JetStream server with the default ports exposed. You can 
 
 ---
 
-## Running Integration Tests
+## Testing
+
+### Running Integration Tests
 
 To run the integration tests for Subdot, follow these steps:
 
@@ -169,15 +189,15 @@ To run the integration tests for Subdot, follow these steps:
    - Make sure you have a Kubernetes cluster running (e.g., Minikube, Kind, or a cloud provider).
    - Ensure `kubectl` is configured to point to your cluster.
    - Install the required dependencies by running:
-     ```bash
-     npm install
-     ```
+```bash
+npm install
+```
 
 2. **Run the Integration Tests**:
    - Execute the following command to run the integration tests:
-     ```bash
-     npm run test:integration
-     ```
+```bash
+npm run test:integration
+```
 
    This will:
    - Deploy the necessary NATS resources using Kubernetes.
@@ -187,9 +207,9 @@ To run the integration tests for Subdot, follow these steps:
 
 3. **Clean Up**:
    - After the tests are complete, clean up the Kubernetes resources by running:
-     ```bash
-     kubectl delete -k k8s/kustomize/nats
-     ```
+```bash
+kubectl delete -k k8s/kustomize/nats
+```
 
    This ensures that no resources are left running in your cluster.
 

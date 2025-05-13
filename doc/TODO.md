@@ -20,12 +20,10 @@
 
 
 ## Advanced Error Handling
-
 - Improve debug capability of distributed events over many streams.
  - Start by evolving the idea of functional-style error handling as described in the `doc/schema.md` file.
  - Add a `debug` flag to the type event metadata that will print out the event data and the schema used for validation.
  - Log event data that was dropped by the filters.
 
 ## DONE
-
 - implement nested schema validation for nested objects as event data
